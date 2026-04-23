@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 提示词注入枢纽 & 全息潜空间实验室 - 完整闭环版</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* ================= 字体定义 ================= */
+        @font-face {
+            font-family: 'AlimamaShuHeiTi';
+            src: url('Alimama_ShuHeiTi_Bold.ttf') format('truetype');
+            font-weight: normal; font-style: normal;
+        }
+        @font-face {
+            font-family: 'HYPixel';
+            src: url('HYPixel11pxU-2.ttf') format('truetype');
+            font-weight: normal; font-style: normal; font-display: swap;
+        }
+
+        /* ================= 全局基础 ================= */
+        :root { --accent: #00E5FF; --bg: #000; }
+        body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #050505; font-family: 'Inter', sans-serif; color: white; }
+        * { box-sizing: border-box; }
+
+        /* ================= PAGE 1: 枢纽层 ================= */
+        #underlying-page {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;
+            background: radial-gradient(circle at center, #100612 0%, #000000 100%);
+            transform: scale(0.9); transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+            display: flex;
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            transition: all 1.2s cubic-bezier(0.19, 1, 0.22, 1); transform-origin: center center;
+        }
+        #ui-layer.zoom-reveal { transform: scale(3); opacity: 0; pointer-events: none; }
+        #bg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+        .input-wrapper { display: flex; flex-direction: column; align-items: center; z-index: 10; width: 100%; }
+        .title-container { display: flex; flex-direction: column; align-items: center; width: 60vw; max-width: 800px; margin-bottom: 50px; }
+        .main-title { font-family: 'AlimamaShuHeiTi', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #FFFFFF; font-size: clamp(40px, 7vw, 86px); font-weight: normal; letter-spacing: clamp(5px, 1.5vw, 14px); text-shadow: 0 0 25px rgba(0, 229, 255, 0.6), 0 0 10px rgba(0, 229, 255, 0.4); margin: 0; line-height: 1.1; white-space: nowrap; text-align: center; }
+        .sub-title { font-family: 'AlimamaShuHeiTi', 'Inter', sans-serif; color: rgba(255, 255, 255, 0.6); font-size: clamp(12px, 1.5vw, 18px); font-weight: normal; letter-spacing: clamp(3px, 0.5vw, 8px); margin-top: 15px; text-transform: uppercase; text-align: center; }
+        
+        .prompt-box { position: relative; display: flex; align-items: center; width: 60vw; max-width: 800px; height: 70px; border-radius: 35px; padding: 0 10px 0 30px; background: rgba(15, 18, 22, 0.6); backdrop-filter: blur(20px); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.15); transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease; }
+        .prompt-box:focus-within { transform: scale(1.02); box-shadow: 0 20px 40px rgba(0, 229, 255, 0.15), 0 0 25px rgba(255, 0, 77, 0.1); }
+        .prompt-box::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 35px; padding: 2px; background: linear-gradient(90deg, #FF004D, #00E5FF, #FF004D, #00E5FF, #FF004D); background-size: 200% 100%; animation: borderFlow 5s linear infinite; -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+        @keyframes borderFlow { 0% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .prompt-box.error-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; box-shadow: 0 0 30px rgba(255, 0, 77, 0.4) !important; }
+        .prompt-box.error-shake::before { background: linear-gradient(90deg, #FF004D, #FF3366, #FF004D) !important; animation: none !important; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0) scale(1.02); } 20%, 80% { transform: translate3d(4px, 0, 0) scale(1.02); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0) scale(1.02); } 40%, 60% { transform: translate3d(6px, 0, 0) scale(1.02); } }
+
+        .sheen-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 35px; overflow: hidden; pointer-events: none; z-index: 1; }
+        .sheen-layer::before { content: ''; position: absolute; top: -100px; bottom: -100px; width: 150px; background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.15) 0%, transparent 60%); animation: smoothGlide 4s linear infinite; will-change: transform; }
+        @keyframes smoothGlide { 0% { transform: skewX(-15deg) translateX(-150px); } 100% { transform: skewX(-15deg) translateX(950px); } }
+
+        .prompt-label { font-family: 'AlimamaShuHeiTi', monospace; background: linear-gradient(90deg, #FF004D, #00E5FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: normal; font-size: 18px; margin-right: 20px; letter-spacing: 1px; }
+        .prompt-input { flex: 1; background: transparent; border: none; outline: none; color: #FFF; font-family: 'Inter', sans-serif; font-size: 20px; }
+        .submit-btn { width: 50px; height: 50px; border-radius: 25px; background: linear-gradient(135deg, #FF004D, #00E5FF); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.3s ease; }
+        .submit-btn:hover { transform: scale(1.1); }
+        .submit-btn svg { width: 24px; height: 24px; fill: #FFF; transition: transform 0.3s ease; }
+        .submit-btn svg path { stroke-width: 1.0 !important; }
+        .submit-btn:hover svg { transform: translateX(3px); }
+        .hint-text { margin-top: 24px; color: rgba(255, 255, 255, 0.6); font-family: 'AlimamaShuHeiTi', sans-serif; font-size: 15px; letter-spacing: 2px; filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.8)); }
+        .hint-text span { font-family: 'AlimamaShuHeiTi', monospace; font-weight: normal; color: #FFFFFF; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5); }
+
+        /* ================= 统一导航组件 ================= */
+        .nav-buttons-container {
+            position: fixed; top: 40px; left: 40px; z-index: 99999;
+            display: flex; gap: 20px;
+            opacity: 0; transform: translateX(-20px);
+            transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            pointer-events: none;
+        }
+        #page2-wrapper.active .nav-buttons-container,
+        #lab-wrapper.active .nav-buttons-container,
+        #page4-wrapper.active .nav-buttons-container,
+        #page5-wrapper.active .nav-buttons-container,
+        #part2-wrapper.active .nav-buttons-container {
+            opacity: 1; transform: translateX(0); transition-delay: 0.8s; pointer-events: auto;
+        }
+        .nav-btn { 
+            background: transparent; border: none; outline: none;
+            color: var(--accent); font-family: 'AlimamaShuHeiTi', 'JetBrains Mono', monospace; font-size: 16px; 
+            font-weight: 600; letter-spacing: 2px; cursor: pointer; display: flex; 
+            align-items: center; gap: 8px; transition: all 0.3s ease; padding: 0;
+        }
+        .nav-btn:hover { color: #FF004D; text-shadow: 0 0 10px rgba(255, 0, 77, 0.5); }
+        .nav-btn svg { width: 18px; height: 18px; fill: currentColor; transition: transform 0.3s ease; }
+        .nav-btn:hover svg { transform: translateX(-3px); }
+
+
+        /* ================= PAGE 2: 潜空间画廊层 ================= */
+        #page2-wrapper {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 5;
+            background: var(--bg); font-family: "Courier New", monospace; color: white;
+            overflow-x: hidden; overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity 1s ease;
+        }
+        #page2-wrapper.active { opacity: 1; pointer-events: auto; }
+
+        #viewport { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; perspective: 1000px; background: transparent; overflow: hidden; pointer-events: none; }
+        #world { position: absolute; width: 100%; height: 100%; transform-style: preserve-3d; pointer-events: none; }
+        .fragment { position: absolute; top: 50%; left: 50%; width: 150px; height: 200px; margin-left: -75px; margin-top: -100px; background: #111; border: 1.5px solid rgba(255,255,255,0.3); background-size: cover; background-position: center; cursor: pointer; pointer-events: auto !important; z-index: 100; filter: brightness(0.9) contrast(1.1); transition: filter 0.3s, border 0.3s, box-shadow 0.3s; will-change: transform, opacity; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; }
+        .fragment:hover { filter: brightness(1.2) contrast(1); border: 2px solid var(--accent); box-shadow: 0 0 40px var(--accent); z-index: 9999 !important; }
+        
+        .ui { position: fixed; top: 80px; left: 40px; z-index: 100; color: #444; font-size: 11px; pointer-events: none; text-transform: uppercase; line-height: 1.6;}
+        .blink-text { animation: blink 1.5s step-start infinite; color: var(--accent); font-weight: bold; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        #hover-tooltip { position: fixed; background: rgba(0, 15, 10, 0.95); color: #fff; font-size: 11px; padding: 6px 12px; border: 1px solid var(--accent); box-shadow: 0 0 15px rgba(0, 229, 255, 0.4); pointer-events: none; z-index: 10000; display: none; letter-spacing: 2px; font-weight: bold; text-transform: uppercase; font-family: 'HYPixel', sans-serif; }
+        #hover-tooltip::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        #line-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        #singularity-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+        #blackbox-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 2; display: none; opacity: 0; transition: opacity 2s ease; }
+        #blackbox-canvas { width: 100%; height: 100%; cursor: crosshair; pointer-events: auto; }
+        
+        #detail-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 9999; display: none; justify-content: center; align-items: center; backdrop-filter: blur(10px); }
+        .detail-box { position: relative; padding: 3px; width: fit-content; max-width: 90vw; background: rgba(0, 15, 10, 0.9); overflow: hidden; box-shadow: 0 0 40px rgba(0, 229, 255, 0.2); box-sizing: border-box; border-radius: 4px; }
+        .close-btn { position: absolute; top: 15px; right: 15px; color: var(--accent); cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 20px; transition: all 0.2s; background: rgba(0, 229, 255, 0.05); border: 1px dashed var(--accent); z-index: 10; width: 32px; height: 32px; border-radius: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+        .close-btn:hover { color: #000; background: var(--accent); border-style: solid; box-shadow: 0 0 15px var(--accent); }
+        .detail-content { position: relative; z-index: 1; background: rgba(0, 12, 8, 0.98); padding: 50px 50px 40px 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; box-sizing: border-box; border: 2px dashed rgba(0, 229, 255, 0.8); box-shadow: inset 0 0 20px rgba(0, 229, 255, 0.2), 0 0 10px rgba(0, 229, 255, 0.5); border-radius: 4px; }
+        #t-img { display: block; max-width: 450px; max-height: 55vh; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.1)); border-radius: 4px; }
+        #t-title { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, 0.6); margin: 25px 0 0 0; letter-spacing: 2px; text-align: center; font-family: 'HYPixel', 'Press Start 2P', monospace; font-size: 18px; line-height: 1.5; }
+        
+        .scroll-space { height: 1800vh; } 
+
+        /* ================= PAGE 3: 终端解构实验室层 ================= */
+        #lab-wrapper {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 200;
+            background: #000; overflow: hidden; display: none; opacity: 0; transition: opacity 1s ease;
+        }
+        #lab-wrapper canvas { display: block; width: 100vw; height: 100vh; position: absolute; top:0; left:0; z-index: 10;}
+        #lab-wrapper video { display: none; }
+
+        .content-placeholder { 
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+            display: flex; align-items: center; justify-content: center; 
+            background: #000; color: #FFFFFF; 
+            font-family: 'Press Start 2P', 'HYPixel', monospace; 
+            font-size: 24px; z-index: 20; opacity: 0; pointer-events: none;
+            transition: opacity 2s ease; 
+        }
+
+        .blinking-dots { display: inline; animation: dots-blink 1s step-end infinite; }
+        @keyframes dots-blink { 50% { opacity: 0; } }
+
+        .blinking-arrow-key {
+            display: none; margin-top: 40px; padding: 10px 60px; 
+            border: 2px solid white; text-align: center;
+            font-family: 'Silkscreen', monospace; font-size: 24px;
+            letter-spacing: -2px; cursor: pointer; 
+            animation: key-blinking 1s step-end infinite; 
+            pointer-events: auto; transition: all 0.3s ease;
+        }
+        .blinking-arrow-key:hover { 
+            background: var(--accent); color: #000; border-color: var(--accent); box-shadow: 0 0 20px var(--accent);
+        }
+
+        /* ================= PAGE 4: 矩阵崩溃层 ================= */
+        #page4-wrapper {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 300;
+            background: #000; overflow: hidden; display: none; opacity: 0; transition: opacity 1s ease;
+        }
+        #networkCanvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10; }
+
+        /* ================= PAGE 5: 全息重构层 ================= */
+        #page5-wrapper {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 400;
+            background: #000; overflow: hidden; display: none; opacity: 0; transition: opacity 1.5s ease;
+        }
+        #p5-canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transition: opacity 1s ease-in-out; }
+        #p5-canvas-container canvas { display: block; }
+        
+        #p5-ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            pointer-events: none; transition: opacity 1s ease-in-out;
+        }
+
+        .track-label {
+            position: absolute; color: #ffffff; font-family: monospace; font-size: 14px;
+            pointer-events: none; text-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+            transform: translate(-50%, -50%); display: none; letter-spacing: 1px;
+            opacity: 0; transition: opacity 0.5s ease; z-index: 11;
+        }
+        .track-line {
+            position: absolute; width: 1px; background: rgba(255, 255, 255, 0.6);
+            pointer-events: none; transform-origin: top left;
+            opacity: 0; transition: opacity 0.5s ease; z-index: 11;
+        }
+        .gaze-label {
+            position: absolute; color: #88ffff; font-family: 'Courier New', monospace; 
+            font-size: 10px; font-weight: bold; pointer-events: none; 
+            text-shadow: 0 0 5px rgba(136,255,255,0.8);
+            transform: translate(4px, -50%); display: none; letter-spacing: 0.5px;
+            white-space: nowrap; z-index: 11;
+        }
+
+        /* 全息进度条 UI */
+        #progress-container {
+            position: absolute; bottom: 30px; left: 5%; width: 90%;
+            height: 2px; background: rgba(255, 255, 255, 0.15);
+            z-index: 100; pointer-events: none;
+        }
+        #progress-bar {
+            height: 100%; width: 0%; background: #ffffff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+            transition: width 0.1s linear;
+        }
+        #progress-text {
+            position: absolute; bottom: 12px; right: 0;
+            color: #ffffff; font-family: 'Courier New', monospace;
+            font-size: 14px; font-weight: bold; letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+        }
+
+        /* 右下角呼吸闪烁箭头 (跳转直接触发 startPart2) */
+        #next-btn {
+            position: absolute; bottom: 40px; right: 5%;
+            display: none; cursor: pointer; z-index: 150; pointer-events: auto;
+            animation: breathe-arrow 2s infinite ease-in-out;
+            padding: 10px;
+        }
+        @keyframes breathe-arrow {
+            0% { opacity: 0.2; transform: translateX(0); }
+            50% { opacity: 1.0; transform: translateX(5px); filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8)); }
+            100% { opacity: 0.2; transform: translateX(0); }
+        }
+
+
+        /* ================= PART 2: 最终生成成果与反思层 ================= */
+        #part2-wrapper {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10000;
+            font-family: 'HYPixel', 'Courier New', Courier, monospace;
+            background: linear-gradient(45deg, #0a0514, #1a0b2e, #0d1b2a, #110822);
+            background-size: 400% 400%;
+            animation: gradientFlow 12s ease infinite; 
+            display: none; opacity: 0; transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 场景1：加载画面 */
+        #scene-loading {
+            position: absolute; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10; transition: opacity 0.8s ease; opacity: 0;
+        }
+
+        .pixel-circle {
+            width: 320px; height: 320px; border-radius: 50%; margin-bottom: 50px;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.85) 1.5px, transparent 2px);
+            background-size: 8px 8px; 
+            -webkit-mask-image: radial-gradient(circle, black 30%, transparent 70%); 
+            mask-image: radial-gradient(circle, black 30%, transparent 70%); 
+            -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+            animation: part2-breathe 3s ease-in-out infinite; 
+        }
+
+        @keyframes part2-breathe {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+
+        .loading-text { color: #ffffff; font-size: 24px; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5); }
+
+        /* 场景2：图片展示 */
+        #scene-gallery {
+            position: absolute; width: 100%; height: 100%;
+            display: none; opacity: 0; padding: 50px 50px 100px 50px; z-index: 5; transition: opacity 0.8s ease;
+        }
+
+        .gallery-container { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 30px; height: 100%; }
+
+        .gallery-item {
+            width: 250px; height: 350px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3); 
+            border-radius: 8px; cursor: pointer; opacity: 0; transform: translateY(60px);
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .gallery-item:hover { transform: translateY(-10px) scale(1.05) !important; border-color: #fff; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 255, 255, 0.2); }
+
+        #scene-gallery.active .gallery-item { animation: slideUpFade 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        #scene-gallery.active .gallery-item:nth-child(1) { animation-delay: 0.2s; }
+        #scene-gallery.active .gallery-item:nth-child(2) { animation-delay: 0.4s; }
+        #scene-gallery.active .gallery-item:nth-child(3) { animation-delay: 0.6s; }
+        #scene-gallery.active .gallery-item:nth-child(4) { animation-delay: 0.8s; }
+
+        @keyframes slideUpFade { to { opacity: 1; transform: translateY(0); } }
+
+        #finish-btn {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            padding: 8px 24px; background-color: transparent; border: 2px solid #fff; color: #fff;
+            font-family: 'HYPixel', sans-serif; font-size: 20px; cursor: pointer; border-radius: 4px; 
+            opacity: 0; transition: opacity 0.5s ease 1s, background-color 0.3s ease, transform 0.3s ease, border-color 0.3s ease; 
+            animation: breathe-btn 2.5s ease-in-out infinite; z-index: 10;
+        }
+        #finish-btn:hover { background-color: rgba(255, 255, 255, 0.1); transform: translateX(-50%) scale(1.05); border-color: rgba(255, 255, 255, 0.8); }
+        #scene-gallery.active #finish-btn { opacity: 1; }
+
+        @keyframes breathe-btn {
+            0%, 100% { transform: translateX(-50%) scale(0.98); opacity: 0.7; }
+            50% { transform: translateX(-50%) scale(1.02); opacity: 1; }
+        }
+
+        /* 点击放大组件 */
+        #lightbox {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9);
+            display: none; justify-content: center; align-items: center; z-index: 100; opacity: 0; transition: opacity 0.3s ease; cursor: zoom-out;
+        }
+        #lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 4px; box-shadow: 0 0 30px rgba(0,0,0,0.8); transform: scale(0.9); transition: transform 0.3s ease; }
+        #lightbox.show { display: flex; }
+        #lightbox.show img { transform: scale(1); }
+
+        /* 数字蓝屏故障特效层 */
+        #scene-gallery.glitching { animation: heavy-video-tear 0.3s infinite steps(5); pointer-events: none; }
+        @keyframes heavy-video-tear {
+            0% { transform: translateX(0); filter: saturate(200%) contrast(150%); clip-path: inset(0 0 0 0); }
+            20% { transform: translateX(40px) skewX(-5deg); filter: hue-rotate(90deg) invert(1); clip-path: inset(20% 0 50% 0); }
+            40% { transform: translateX(-50px) skewX(10deg); filter: drop-shadow(15px 0 red) drop-shadow(-15px 0 cyan); clip-path: inset(60% 0 10% 0); }
+            60% { transform: translateX(20px); filter: grayscale(1) contrast(300%); clip-path: inset(10% 0 80% 0); }
+            80% { transform: translateX(-30px); filter: hue-rotate(-90deg) saturate(300%); clip-path: inset(80% 0 5% 0); }
+            100% { transform: translateX(0); filter: none; clip-path: inset(0 0 0 0); }
+        }
+
+        #video-glitch-master { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; z-index: 99; }
+        #video-glitch-master.show { display: block; }
+        .vgm-bsod {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #0000aa; color: #ffffff;
+            font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 30px; line-height: 1.2; word-wrap: break-word; white-space: pre-wrap;
+            opacity: 0; animation: vgm-bsod-flash 1.2s infinite linear;
+        }
+        @keyframes vgm-bsod-flash {
+            0%, 9% { opacity: 0; } 10%, 15% { opacity: 1; transform: translateX(20px); clip-path: inset(10% 0 60% 0); }
+            16%, 39% { opacity: 0; } 40%, 48% { opacity: 1; transform: translateX(-30px); clip-path: inset(50% 0 10% 0); filter: invert(1); }
+            49%, 74% { opacity: 0; } 75%, 85% { opacity: 1; transform: translateX(0); clip-path: inset(0 0 0 0); } 86%, 100% { opacity: 0; }
+        }
+        .vgm-blackout { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; opacity: 0; animation: vgm-blackout-flash 0.9s infinite linear; }
+        .vgm-blackout::before, .vgm-blackout::after { content: ''; position: absolute; background: #fff; }
+        .vgm-blackout::before { animation: block-move-1 0.2s infinite steps(2); }
+        .vgm-blackout::after { animation: block-move-2 0.3s infinite steps(3); }
+        @keyframes vgm-blackout-flash { 0%, 25% { opacity: 0; } 26%, 35% { opacity: 1; } 36%, 65% { opacity: 0; } 66%, 72% { opacity: 1; filter: invert(1); } 73%, 100% { opacity: 0; } }
+        @keyframes block-move-1 { 0% { top: 15%; left: 10%; width: 50%; height: 8%; } 50% { top: 60%; left: 40%; width: 30%; height: 15%; } 100% { top: 30%; left: 60%; width: 20%; height: 5%; } }
+        @keyframes block-move-2 { 0% { top: 80%; left: 5%; width: 40%; height: 5%; } 50% { top: 10%; left: 70%; width: 10%; height: 40%; } 100% { top: 50%; left: 20%; width: 60%; height: 10%; } }
+        .vgm-noise {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.15; mix-blend-mode: overlay; pointer-events: none; animation: noise-shake 0.1s infinite alternate;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        @keyframes noise-shake { 0% { transform: translate(2px, 2px); opacity: 0.1; } 100% { transform: translate(-2px, -2px); opacity: 0.3; } }
+
+        /* 场景3：高级版 AI 数据矩阵墙 */
+        #scene-glitch {
+            position: absolute; width: 100%; height: 100%; 
+            background: radial-gradient(circle at center, #3a0000 0%, #050000 80%); 
+            display: none; overflow: hidden; z-index: 10; opacity: 0; transition: opacity 1.5s ease;
+        }
+
+        #scene-glitch::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.95) 100%);
+            pointer-events: none; z-index: 20;
+        }
+
+        #matrix-wall {
+            position: absolute; left: 50%; top: 50%;
+            width: 3500px; height: 2600px; margin-left: -1750px; margin-top: -1300px;
+            display: flex; flex-wrap: wrap; gap: 12px;
+            justify-content: center; align-content: center; transform-style: preserve-3d;
+            animation: camera-pan 45s linear infinite alternate;
+        }
+
+        @keyframes camera-pan {
+            0% { transform: perspective(1200px) rotateX(20deg) rotateY(-15deg) translateZ(-400px) translateX(-5%) translateY(-5%); }
+            100% { transform: perspective(1200px) rotateX(-5deg) rotateY(15deg) translateZ(100px) translateX(5%) translateY(5%); }
+        }
+
+        .matrix-wrapper {
+            width: 100px; height: 140px; opacity: 0;
+            animation: data-pop-in 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes data-pop-in {
+            0% { opacity: 0; transform: translateY(50px) scale(0.8); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .matrix-img {
+            width: 100%; height: 100%; object-fit: cover; border-radius: 4px;
+            filter: grayscale(85%) brightness(0.3) contrast(1.2);
+            transition: 0.5s; box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .matrix-img.analyzing {
+            animation: ai-pulse 4s infinite alternate ease-in-out; position: relative;
+        }
+
+        @keyframes ai-pulse {
+            0%, 20% { 
+                filter: grayscale(85%) brightness(0.3); transform: scale(1); z-index: 1; 
+                box-shadow: 0 5px 15px rgba(0,0,0,0.8); border-color: rgba(255,255,255,0.05);
+            }
+            80%, 100% { 
+                filter: grayscale(0%) brightness(1.2) contrast(1.1); transform: scale(1.15); z-index: 10; 
+                box-shadow: 0 0 25px rgba(255, 60, 60, 0.8), 0 0 10px rgba(255, 255, 255, 0.5); 
+                border-color: rgba(255,255,255,0.8);
+            }
+        }
+
+        #next-arrow-btn {
+            position: absolute; bottom: 50px; right: 50px;
+            color: #ffffff; font-size: 36px; cursor: pointer;
+            opacity: 0; pointer-events: none; z-index: 30; transition: opacity 1.5s ease;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            animation: arrow-bounce 2s infinite;
+        }
+        #next-arrow-btn.show { opacity: 1; pointer-events: auto; }
+        #next-arrow-btn:hover { color: #ff9999; }
+
+        @keyframes arrow-bounce {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(15px); }
+        }
+
+        /* 场景4：人工智能思考页 */
+        #scene-ai-question {
+            position: absolute; width: 100%; height: 100%;
+            background-color: #000000; display: none; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; transition: opacity 2s ease; 
+        }
+
+        .ai-question-text {
+            color: #ffffff; font-size: 36px; letter-spacing: 6px; text-align: center; padding: 0 20px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            animation: gentle-breathe 4s infinite alternate;
+        }
+
+        @keyframes gentle-breathe {
+            0% { opacity: 0.8; transform: scale(0.98); }
+            100% { opacity: 1; transform: scale(1.02); text-shadow: 0 0 30px rgba(255, 255, 255, 0.5); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="underlying-page"></div>
+
+    <div id="ui-layer">
+        <div class="input-wrapper">
+            <div class="title-container">
+                <h1 class="main-title">尝试生成京剧图片吧</h1>
+                <div class="sub-title">Attempt to Generate Peking Opera Images</div>
+            </div>
+            <div class="prompt-box" id="promptBox">
+                <div class="sheen-layer"></div>
+                <span class="prompt-label">Prompt</span>
+                <input type="text" class="prompt-input" id="userInput" placeholder="Waiting for directives..." autocomplete="off">
+                <button class="submit-btn" id="injectBtn" onclick="triggerReveal()">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="hint-text">&gt; 请输入 <span>Peking Opera</span></div>
+        </div>
+    </div>
+
+    <div id="page2-wrapper">
+        <div class="nav-buttons-container">
+            <button class="nav-btn" onclick="reverseReveal()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                返回
+            </button>
+            <button class="nav-btn" onclick="goHome()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                首页
+            </button>
+        </div>
+
+        <div class="ui"><span id="ui-instruction" class="blink-text">&gt; 鼠标滚动浏览_</span></div>
+        <div id="hover-tooltip">点击查看大图</div>
+        <div id="viewport">
+            <canvas id="singularity-canvas"></canvas>
+            <svg id="line-svg"></svg>
+            <div id="world"></div>
+        </div>
+        <div id="blackbox-layer"><canvas id="blackbox-canvas"></canvas></div>
+        <div id="detail-overlay">
+            <div class="detail-box">
+                <div class="detail-content">
+                    <div class="close-btn" onclick="closeDetail()">×</div>
+                    <img id="t-img" src="" alt="Forensic Data">
+                    <h2 id="t-title">档案载入</h2>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-space"></div>
+    </div>
+
+    <div id="lab-wrapper">
+        <div class="nav-buttons-container">
+            <button class="nav-btn" onclick="returnToGallery()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                返回
+            </button>
+            <button class="nav-btn" onclick="goHome()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                首页
+            </button>
+        </div>
+
+        <video id="v1" src="video1.mp4" loop muted playsinline></video>
+        <canvas id="labCanvas"></canvas>
+
+        <div class="content-placeholder" id="finalScreen">
+            <div style="text-align: center; display: inline-block;">
+                <p id="cnText" style="display: block; margin: 0; line-height: 1.6;">准备生成</p>
+                <p id="enText" style="display: block; margin: 0; margin-top: 24px; line-height: 1.6;"></p>
+                <div id="blinkingArrowKey" class="blinking-arrow-key" onclick="goToMatrixPage()">──────&gt;</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page4-wrapper">
+        <div class="nav-buttons-container" id="p4-nav">
+            <button class="nav-btn" onclick="returnToLabFromPage4()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                返回
+            </button>
+            <button class="nav-btn" onclick="goHome()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                首页
+            </button>
+        </div>
+        <canvas id="networkCanvas"></canvas>
+    </div>
+
+    <div id="page5-wrapper">
+        <div class="nav-buttons-container" id="p5-nav" style="z-index: 500;">
+            <button class="nav-btn" onclick="returnToPage4FromPage5()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                返回
+            </button>
+            <button class="nav-btn" onclick="goHome()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                首页
+            </button>
+        </div>
+
+        <div id="p5-canvas-container"></div>
+        
+        <div id="p5-ui-layer">
+            <div id="progress-container">
+                <div id="progress-text">0%</div>
+                <div id="progress-bar"></div>
+            </div>
+            <div id="next-btn" onclick="startPart2()">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div id="part2-wrapper">
+        
+        <div class="nav-buttons-container active" id="part2-nav" style="opacity: 1; pointer-events: auto; z-index: 100001; position: absolute; top: 40px; left: 40px;">
+            <button class="nav-btn" onclick="returnToPage5FromPart2()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                返回
+            </button>
+            <button class="nav-btn" onclick="goHome()">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                首页
+            </button>
+        </div>
+
+        <div id="scene-loading">
+            <div class="pixel-circle"></div>
+            <div class="loading-text">即将生成...</div>
+        </div>
+
+        <div id="scene-gallery">
+            <div class="gallery-container">
+                <img src="jingjutupian.jpg" class="gallery-item" alt="京剧图片1" onclick="openLightbox(this.src)">
+                <img src="jingjutupian2.jpg" class="gallery-item" alt="京剧图片2" onclick="openLightbox(this.src)">
+                <img src="jingjutupian3.jpg" class="gallery-item" alt="京剧图片3" onclick="openLightbox(this.src)">
+                <img src="jingjutupian4.jpg" class="gallery-item" alt="京剧图片4" onclick="openLightbox(this.src)">
+            </div>
+            <button id="finish-btn" onclick="startGlitchTransition()">完成</button>
+        </div>
+
+        <div id="lightbox" onclick="closeLightbox()">
+            <img id="lightbox-img" src="" alt="放大图片">
+        </div>
+
+        <div id="video-glitch-master">
+            <div class="vgm-bsod">A fatal exception 0E has occurred at 016F:BFF9B3D4...</div>
+            <div class="vgm-blackout"></div>
+            <div class="vgm-noise"></div>
+        </div>
+
+        <div id="scene-glitch">
+            <div id="matrix-wall"></div>
+            <div id="next-arrow-btn" onclick="goToAiQuestion()">►</div>
+        </div>
+
+        <div id="scene-ai-question">
+            <div class="ai-question-text">人工智能如何理解京剧？</div>
+        </div>
+    </div>
+
+    <script>
+        // ================= 全局状态管理 & 导航路由 =================
+        function resetLabState() {
+            window.isUnlocked = false; window.isTyping = false;
+            if(window.cnInterval) clearInterval(window.cnInterval);
+            if(window.enInterval) clearInterval(window.enInterval);
+            document.getElementById('finalScreen').style.opacity = '0';
+            document.getElementById('finalScreen').style.pointerEvents = 'none';
+            document.getElementById('blinkingArrowKey').style.display = 'none';
+            document.getElementById('cnText').innerHTML = "准备生成";
+            document.getElementById('enText').innerHTML = "";
+            const v1 = document.getElementById('v1');
+            if (v1) { v1.currentTime = 0; v1.play(); }
+        }
+
+        window.reverseReveal = function() { 
+            document.getElementById('page2-wrapper').classList.remove('active');
+            setTimeout(() => {
+                document.getElementById('underlying-page').style.transform = "scale(0.9)";
+                document.getElementById('ui-layer').classList.remove('zoom-reveal');
+                document.getElementById('userInput').value = "";
+                document.getElementById('userInput').placeholder = "Waiting for directives...";
+            }, 800); 
+        };
+
+        window.returnToGallery = function() { 
+            const labWrapper = document.getElementById('lab-wrapper');
+            labWrapper.classList.remove('active'); labWrapper.style.opacity = '0';
+            setTimeout(() => {
+                labWrapper.style.display = 'none'; resetLabState();
+                document.getElementById('underlying-page').style.display = 'flex';
+                const p2 = document.getElementById('page2-wrapper');
+                p2.style.display = 'block';
+                setTimeout(() => { p2.style.opacity = '1'; p2.classList.add('active'); }, 50);
+            }, 1000);
+        };
+
+        window.returnToLabFromPage4 = function() { 
+            const p4 = document.getElementById('page4-wrapper');
+            p4.classList.remove('active'); p4.style.opacity = '0';
+            setTimeout(() => {
+                p4.style.display = 'none';
+                if (window.resetPage4) window.resetPage4();
+                const labWrapper = document.getElementById('lab-wrapper');
+                labWrapper.style.display = 'block'; void labWrapper.offsetWidth;
+                labWrapper.style.opacity = '1'; labWrapper.classList.add('active');
+                resetLabState(); 
+            }, 1000);
+        };
+
+        window.returnToPage4FromPage5 = function() {
+            const p5 = document.getElementById('page5-wrapper');
+            p5.classList.remove('active'); p5.style.opacity = '0';
+            setTimeout(() => {
+                p5.style.display = 'none';
+                if (window.resetPage5) window.resetPage5();
+                
+                const p4Wrapper = document.getElementById('page4-wrapper');
+                p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth;
+                p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active');
+                if (window.resetPage4) window.resetPage4();
+            }, 1000);
+        };
+
+        // 从终局结果页面返回到粒子重构页面
+        window.returnToPage5FromPart2 = function() {
+            const part2Wrapper = document.getElementById('part2-wrapper');
+            part2Wrapper.style.opacity = '0';
+            setTimeout(() => {
+                part2Wrapper.style.display = 'none';
+                
+                // 完全重置第二部分的状态，以便下次还能正常进入
+                document.getElementById('scene-loading').style.display = 'none';
+                document.getElementById('scene-loading').style.opacity = '0';
+                document.getElementById('scene-gallery').style.display = 'none';
+                document.getElementById('scene-gallery').style.opacity = '0';
+                document.getElementById('scene-gallery').classList.remove('active', 'glitching');
+                document.getElementById('video-glitch-master').style.display = 'none';
+                document.getElementById('video-glitch-master').classList.remove('show');
+                document.getElementById('scene-glitch').style.display = 'none';
+                document.getElementById('scene-glitch').style.opacity = '0';
+                document.getElementById('matrix-wall').innerHTML = '';
+                document.getElementById('next-arrow-btn').classList.remove('show');
+                document.getElementById('scene-ai-question').style.display = 'none';
+                document.getElementById('scene-ai-question').style.opacity = '0';
+
+                // 重新显示第 5 页
+                const p5Wrapper = document.getElementById('page5-wrapper');
+                p5Wrapper.style.display = 'block';
+                void p5Wrapper.offsetWidth;
+                p5Wrapper.style.opacity = '1';
+                p5Wrapper.classList.add('active');
+            }, 1000);
+        };
+
+        window.goHome = function() { 
+            ['lab-wrapper', 'page4-wrapper', 'page2-wrapper', 'page5-wrapper', 'part2-wrapper'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.classList.remove('active'); el.style.opacity = '0'; }
+            });
+            
+            if(window.isTransitioning) window.isTransitioning = false;
+
+            setTimeout(() => {
+                ['lab-wrapper', 'page4-wrapper', 'page2-wrapper', 'page5-wrapper', 'part2-wrapper'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+                
+                resetLabState();
+                if (window.resetPage4) window.resetPage4();
+                if (window.resetPage5) window.resetPage5(); 
+
+                // 清理第二部分状态
+                document.getElementById('scene-loading').style.display = 'none';
+                document.getElementById('scene-loading').style.opacity = '0';
+                document.getElementById('scene-gallery').style.display = 'none';
+                document.getElementById('scene-gallery').style.opacity = '0';
+                document.getElementById('scene-gallery').classList.remove('active', 'glitching');
+                document.getElementById('video-glitch-master').style.display = 'none';
+                document.getElementById('video-glitch-master').classList.remove('show');
+                document.getElementById('scene-glitch').style.display = 'none';
+                document.getElementById('scene-glitch').style.opacity = '0';
+                document.getElementById('matrix-wall').innerHTML = '';
+                document.getElementById('next-arrow-btn').classList.remove('show');
+                document.getElementById('scene-ai-question').style.display = 'none';
+                document.getElementById('scene-ai-question').style.opacity = '0';
+
+                const p1Under = document.getElementById('underlying-page');
+                p1Under.style.display = 'flex'; p1Under.style.transform = "scale(0.9)";
+                const uiLayer = document.getElementById('ui-layer');
+                uiLayer.style.display = 'flex'; uiLayer.classList.remove('zoom-reveal');
+                const userInput = document.getElementById('userInput');
+                userInput.value = ""; userInput.placeholder = "Waiting for directives...";
+            }, 1000);
+        };
+
+        window.goToMatrixPage = function() { 
+            const labWrapper = document.getElementById('lab-wrapper');
+            labWrapper.style.opacity = '0';
+            setTimeout(() => {
+                labWrapper.classList.remove('active'); labWrapper.style.display = 'none'; resetLabState();
+                const p4Wrapper = document.getElementById('page4-wrapper');
+                p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth; 
+                p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active'); 
+                if (!window.p4Init) { window.initPage4(); window.p4Init = true; } 
+                else { window.resetPage4(); }
+            }, 1000);
+        };
+
+        window.goToPage5 = function() {
+            const p4Wrapper = document.getElementById('page4-wrapper');
+            p4Wrapper.classList.remove('active');
+            p4Wrapper.style.opacity = '0';
+            setTimeout(() => {
+                p4Wrapper.style.display = 'none';
+                if (window.resetPage4) window.resetPage4();
+
+                const p5Wrapper = document.getElementById('page5-wrapper');
+                p5Wrapper.style.display = 'block';
+                void p5Wrapper.offsetWidth; 
+                p5Wrapper.style.opacity = '1';
+                p5Wrapper.classList.add('active');
+                
+                if (!window.p5Init) { window.initPage5(); window.p5Init = true; }
+                else { window.resetPage5(); }
+            }, 1000);
+        };
+
+
+        // ================= PAGE 1: 枢纽逻辑 =================
+        (function() {
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.02); 
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.z = 12;
+
+            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: "high-performance" });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const uiLayer = document.getElementById('ui-layer');
+            uiLayer.insertBefore(renderer.domElement, uiLayer.firstChild);
+            renderer.domElement.id = 'bg-canvas';
+
+            const shaderUniforms = { uTime: { value: 0 }, uColorRed: { value: new THREE.Color(0xFF004D) }, uColorCyan: { value: new THREE.Color(0x00E5FF) } };
+            const holographicMaterial = new THREE.ShaderMaterial({
+                uniforms: shaderUniforms,
+                vertexShader: `varying vec3 vPosition; varying vec3 vNormal; void main() { vPosition = position; vNormal = normal; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+                fragmentShader: `uniform float uTime; uniform vec3 uColorRed; uniform vec3 uColorCyan; varying vec3 vPosition; varying vec3 vNormal; void main() { float wave = sin(vPosition.y * 3.0 + uTime * 0.4); float alpha = smoothstep(-1.2, 1.2, wave); vec3 finalColor = mix(uColorRed, uColorCyan, alpha); float intensity = (0.7 - dot(vNormal, vec3(0, 0, 1.0))); gl_FragColor = vec4(finalColor, (intensity + 0.15) * 0.4); }`,
+                transparent: true, wireframe: true, side: THREE.DoubleSide
+            });
+
+            const particleCount = 8000; 
+            const particleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const speeds = new Float32Array(particleCount);
+            for(let i = 0; i < particleCount; i++) {
+                positions[i*3] = (Math.random() - 0.5) * 40; positions[i*3+1] = (Math.random() - 0.5) * 30; 
+                positions[i*3+2] = -2 - Math.random() * 8; speeds[i] = 0.01 + Math.random() * 0.02; 
+            }
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({ color: 0x00E5FF, size: 0.075, transparent: true, opacity: 0.6, sizeAttenuation: true, blending: THREE.AdditiveBlending });
+            const sandCloud = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(sandCloud);
+
+            const interactiveModels = [];
+            const loader = new THREE.GLTFLoader();
+            const COLLISION_RADIUS = 4.2; 
+
+            function setupModel(gltf) {
+                const model = gltf.scene;
+                model.traverse(child => { if (child.isMesh) child.material = holographicMaterial; });
+                model.scale.set(5, 5, 5);
+                model.userData = {
+                    velocity: new THREE.Vector3((Math.random()-0.5)*0.1, (Math.random()-0.5)*0.1, 0),
+                    baseRotationY: -Math.PI / 2, phaseX: Math.random() * Math.PI * 2, phaseY: Math.random() * Math.PI * 2,
+                    phaseZ: Math.random() * Math.PI * 2, freqX: 0.3 + Math.random() * 0.4, freqY: 0.3 + Math.random() * 0.4,
+                    freqZ: 0.3 + Math.random() * 0.4, wanderAngle: Math.random() * Math.PI * 2
+                };
+                model.position.set((Math.random()-0.5)*5, (Math.random()-0.5)*2, 0);
+                scene.add(model);
+                interactiveModels.push(model);
+            }
+
+            loader.load('model1.glb', setupModel); loader.load('model2.glb', setupModel); loader.load('model3.glb', setupModel);
+
+            const mouse3D = new THREE.Vector3();
+            window.addEventListener('mousemove', (e) => {
+                if (document.getElementById('page2-wrapper').classList.contains('active') || document.getElementById('lab-wrapper').classList.contains('active') || document.getElementById('page4-wrapper').classList.contains('active') || document.getElementById('page5-wrapper').classList.contains('active')) return;
+                const x = (e.clientX / window.innerWidth) * 2 - 1; const y = -(e.clientY / window.innerHeight) * 2 + 1;
+                const vector = new THREE.Vector3(x, y, 0.5).unproject(camera);
+                const dir = vector.sub(camera.position).normalize();
+                mouse3D.copy(camera.position).add(dir.multiplyScalar(-camera.position.z / dir.z));
+            });
+
+            const clock = new THREE.Clock();
+            function animateP1() {
+                requestAnimationFrame(animateP1);
+                if (document.getElementById('page2-wrapper').classList.contains('active') || document.getElementById('lab-wrapper').classList.contains('active') || document.getElementById('page4-wrapper').classList.contains('active') || document.getElementById('page5-wrapper').classList.contains('active')) return; 
+                
+                const time = clock.getElapsedTime();
+                shaderUniforms.uTime.value = time;
+
+                const posAttr = sandCloud.geometry.attributes.position.array;
+                for(let i = 0; i < particleCount; i++) {
+                    posAttr[i*3+1] -= speeds[i]; if(posAttr[i*3+1] < -15) posAttr[i*3+1] = 15; 
+                    posAttr[i*3] += Math.sin(time * 0.3 + i) * 0.005; 
+                }
+                sandCloud.geometry.attributes.position.needsUpdate = true;
+
+                interactiveModels.forEach((model, index) => {
+                    const data = model.userData;
+                    const distToMouse = model.position.distanceTo(mouse3D);
+                    if (distToMouse < 5.0) {
+                        const flee = new THREE.Vector3().subVectors(model.position, mouse3D).normalize().multiplyScalar(0.06);
+                        flee.z = 0; data.velocity.add(flee);
+                    }
+                    for (let j = index + 1; j < interactiveModels.length; j++) {
+                        const other = interactiveModels[j];
+                        const diff = new THREE.Vector3().subVectors(model.position, other.position);
+                        const dist = diff.length();
+                        if (dist < COLLISION_RADIUS) {
+                            const normal = diff.clone().normalize();
+                            const overlap = COLLISION_RADIUS - dist;
+                            const separation = normal.clone().multiplyScalar(overlap / 2);
+                            model.position.add(separation); other.position.sub(separation);
+                            const relVel = new THREE.Vector3().subVectors(data.velocity, other.userData.velocity);
+                            const velAlongNormal = relVel.dot(normal);
+                            if (velAlongNormal < 0) {
+                                const impulse = normal.clone().multiplyScalar(-(1 + 1.2) * velAlongNormal / 2);
+                                data.velocity.add(impulse); other.userData.velocity.sub(impulse);
+                                data.velocity.add(normal.clone().multiplyScalar(0.02)); other.userData.velocity.sub(normal.clone().multiplyScalar(0.02));
+                            }
+                        }
+                    }
+                    data.wanderAngle += (Math.random() - 0.5) * 0.2; 
+                    data.velocity.x += Math.cos(data.wanderAngle) * 0.003; data.velocity.y += Math.sin(data.wanderAngle) * 0.003;
+                    data.velocity.multiplyScalar(0.98); 
+                    if (data.velocity.length() < 0.03) data.velocity.setLength(0.03); 
+                    data.velocity.clampLength(0, 0.15);
+                    model.position.add(data.velocity);
+
+                    const LIMIT_X = 6.5, LIMIT_Y = 3.5;
+                    if (model.position.x > LIMIT_X) { model.position.x = LIMIT_X; data.velocity.x = -Math.abs(data.velocity.x) * 1.5; } 
+                    else if (model.position.x < -LIMIT_X) { model.position.x = -LIMIT_X; data.velocity.x = Math.abs(data.velocity.x) * 1.5; }
+                    if (model.position.y > LIMIT_Y) { model.position.y = LIMIT_Y; data.velocity.y = -Math.abs(data.velocity.y) * 1.5; } 
+                    else if (model.position.y < -LIMIT_Y) { model.position.y = -LIMIT_Y; data.velocity.y = Math.abs(data.velocity.y) * 1.5; }
+                    model.position.z *= 0.5; 
+
+                    const maxAngle = Math.PI / 6; 
+                    model.rotation.x = Math.sin(time * data.freqX + data.phaseX) * maxAngle;
+                    model.rotation.y = data.baseRotationY + Math.sin(time * data.freqY + data.phaseY) * maxAngle;
+                    model.rotation.z = Math.sin(time * data.freqZ + data.phaseZ) * maxAngle;
+                });
+                renderer.render(scene, camera);
+            }
+            animateP1();
+
+            window.addEventListener('resize', () => {
+                if (document.getElementById('lab-wrapper').classList.contains('active') || document.getElementById('page4-wrapper').classList.contains('active') || document.getElementById('page5-wrapper').classList.contains('active')) return;
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            window.triggerReveal = function() {
+                const userInput = document.getElementById('userInput');
+                const box = document.getElementById('promptBox');
+                if(userInput.value.toLowerCase().includes("peking opera")) {
+                    document.getElementById('ui-layer').classList.add('zoom-reveal');
+                    document.getElementById('underlying-page').style.transform = "scale(1)";
+                    setTimeout(() => {
+                        document.getElementById('page2-wrapper').classList.add('active');
+                        if (!window.p2Init) { window.initPage2(); window.p2Init = true; }
+                    }, 800); 
+                } else {
+                    box.classList.remove('error-shake'); void box.offsetWidth; 
+                    box.classList.add('error-shake');
+                    userInput.value = ""; userInput.placeholder = "INVALID PROMPT";
+                }
+            }
+            document.getElementById('userInput').addEventListener('keydown', e => { if (e.key === 'Enter') triggerReveal(); });
+        })();
+
+
+        // ================= PAGE 2: 潜空间画廊逻辑 =================
+        window.p2Init = false;
+        window.initPage2 = function() {
+            const world = document.getElementById('world'); const svg = document.getElementById('line-svg');
+            const canvas = document.getElementById('singularity-canvas'); const ctx = canvas.getContext('2d');
+            const bbLayer = document.getElementById('blackbox-layer'); const bbCanvas = document.getElementById('blackbox-canvas');
+            const bbCtx = bbCanvas.getContext('2d'); const uiInstruction = document.getElementById('ui-instruction');
+            const hoverTooltip = document.getElementById('hover-tooltip'); const p2Wrapper = document.getElementById('page2-wrapper');
+
+            let bbActive = false; const hexChars = "0123456789ABCDEF"; const count = 350; 
+            const fragments = []; let isPaused = false; const connections = [];
+            let p2MouseX = 0, p2MouseY = 0; let bgCodes = []; const bgCodeCount = 180;
+            let isExploding = false; let explosionStartTime = 0; let explosionParticles = []; let excelData = []; 
+
+            window.addEventListener('mousemove', (e) => {
+                if (!p2Wrapper.classList.contains('active')) return;
+                p2MouseX = (e.clientX / window.innerWidth) * 2 - 1; p2MouseY = (e.clientY / window.innerHeight) * 2 - 1;
+                if (hoverTooltip.style.display === 'block') { hoverTooltip.style.left = (e.clientX + 15) + 'px'; hoverTooltip.style.top = (e.clientY + 15) + 'px'; }
+            });
+
+            bbCanvas.addEventListener('click', (e) => {
+                if (isExploding || !p2Wrapper.classList.contains('active')) return; 
+                const rect = bbCanvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+                if (Math.sqrt(Math.pow(x - bbCanvas.width/2, 2) + Math.pow(y - bbCanvas.height/2, 2)) < 120) {
+                    isExploding = true; explosionStartTime = Date.now(); uiInstruction.innerText = ""; 
+                    for(let i = 0; i < 800; i++) {
+                        explosionParticles.push({ x: (Math.random() - 0.5) * 2500, y: (Math.random() - 0.5) * 2500, z: Math.random() * 2000 + 100, speedZ: Math.random() * 20 + 15, char: hexChars[Math.floor(Math.random() * 16)] });
+                    }
+                    setTimeout(() => { 
+                        p2Wrapper.style.opacity = '0';
+                        setTimeout(() => {
+                            p2Wrapper.style.display = 'none'; document.getElementById('underlying-page').style.display = 'none'; document.getElementById('ui-layer').style.display = 'none';
+                            const labWrapper = document.getElementById('lab-wrapper'); labWrapper.style.display = 'block'; void labWrapper.offsetWidth; labWrapper.style.opacity = '1'; labWrapper.classList.add('active'); 
+                            if (!window.labInit) { window.initLab(); window.labInit = true; }
+                        }, 1000); 
+                    }, 2200);
+                }
+            });
+
+            let particles = []; const particleCount = 200;
+            function resizeP2() {
+                if (document.getElementById('lab-wrapper').classList.contains('active') || document.getElementById('page4-wrapper').classList.contains('active') || document.getElementById('page5-wrapper').classList.contains('active')) return;
+                canvas.width = bbCanvas.width = window.innerWidth; canvas.height = bbCanvas.height = window.innerHeight;
+                bgCodes = []; for(let i=0; i<bgCodeCount; i++) { bgCodes.push({ x: Math.random() * bbCanvas.width, y: Math.random() * bbCanvas.height, char: hexChars[Math.floor(Math.random() * 16)], alpha: Math.random() * 0.3 }); }
+            }
+            window.addEventListener('resize', resizeP2); resizeP2();
+
+            async function loadExcelData() {
+                try {
+                    const response = await fetch('Peking Opera image.xlsx'); const arrayBuffer = await response.arrayBuffer();
+                    const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+                    excelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                } catch (error) { console.warn("无法加载 Excel 文件，请确保在本地服务器环境下运行。"); }
+                initSceneP2();
+            }
+
+            async function initSceneP2() {
+                for (let i = 0; i < count; i++) {
+                    const el = document.createElement('div'); el.className = 'fragment';
+                    const imgNum = i + 1; const fileName = `${imgNum}.jpg`;
+                    const row = excelData.find(r => String(r.url) === fileName || String(r.url) === String(imgNum));
+                    const currentData = { url: fileName, title: row && row.title ? row.title : `未命名档案 // ${imgNum}` };
+                    const progress = i / (count - 1); 
+                    const baseRadius = 60 + progress * 1600; const zDepth = -6500 + progress * 5500; const baseAngle = i * 0.5; 
+                    const pos = { x: Math.cos(baseAngle) * baseRadius + (Math.random() - 0.5) * (80 + progress * 400), y: Math.sin(baseAngle) * baseRadius + (Math.random() - 0.5) * (80 + progress * 400), z: zDepth, rotX: Math.random() * 360, rotY: Math.random() * 360 };
+                    el.style.backgroundImage = `url('${currentData.url}')`;
+                    el.onclick = (e) => { e.stopPropagation(); showDetail(i); };
+                    el.onmouseenter = () => { if(!isPaused && p2Wrapper.classList.contains('active')) hoverTooltip.style.display = 'block'; };
+                    el.onmouseleave = () => { hoverTooltip.style.display = 'none'; };
+                    world.appendChild(el);
+                    fragments.push({ el, ...pos, isConverted: false, data: currentData, originUrl: currentData.url });
+                    for (let j = 0; j < 3; j++) { connections.push([i, (i + Math.floor(Math.random() * 20) + 1) % count]); }
+                }
+                for (let i = 0; i < particleCount; i++) { particles.push({ angle: Math.random() * Math.PI * 2, radius: Math.random() * 300, speed: 0.05 + Math.random() * 0.1, size: 0.2 + Math.random() * 0.6 }); }
+                animateP2();
+            }
+
+            function getProjectedPos(x, y, z) {
+                const rotY = p2MouseX * 6 * (Math.PI / 180); const rotX = -p2MouseY * 6 * (Math.PI / 180);
+                let y1 = y * Math.cos(rotX) - z * Math.sin(rotX); let z1 = y * Math.sin(rotX) + z * Math.cos(rotX);
+                let x2 = x * Math.cos(rotY) + z1 * Math.sin(rotY); let z2 = -x * Math.sin(rotY) + z1 * Math.cos(rotY);
+                const perspective = 1000; const scale = perspective / (perspective - z2);
+                return { x: window.innerWidth / 2 + x2 * scale, y: window.innerHeight / 2 + y1 * scale, visible: z2 < perspective - 100, zVal: z2, scale: scale };
+            }
+
+            function drawSingularity(scroll) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height); if (scroll < 0.5) return; 
+                const intensity = mapRange(scroll, 0.5, 1.0, 0, 1); ctx.globalCompositeOperation = 'lighter';
+                particles.forEach(p => {
+                    p.angle += p.speed * (1 + intensity * 8); const r = p.radius * (1 - intensity * 0.99); 
+                    ctx.beginPath(); ctx.arc(canvas.width / 2 + Math.cos(p.angle) * r, canvas.height / 2 + Math.sin(p.angle) * r, p.size * (1 + intensity), 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0, 229, 255, ${intensity})`; ctx.fill();
+                });
+            }
+
+            function drawBlackboxFrame(time) {
+                const cx = bbCanvas.width / 2; const cy = bbCanvas.height / 2;
+                if (isExploding) {
+                    bbCtx.fillStyle = "rgba(0, 0, 0, 0.3)"; bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
+                    let elapsed = Date.now() - explosionStartTime; let speedMultiplier = 1 + Math.pow((elapsed / 800), 3); const perspective = 400; 
+                    bbCtx.globalCompositeOperation = 'lighter';
+                    explosionParticles.forEach(p => {
+                        p.z -= p.speedZ * speedMultiplier;
+                        if (p.z < 1) { p.z = 2000; p.x = (Math.random() - 0.5) * 2500; p.y = (Math.random() - 0.5) * 2500; }
+                        if(Math.random() > 0.8) p.char = hexChars[Math.floor(Math.random() * 16)];
+                        let scale = perspective / p.z; let projX = cx + p.x * scale; let projY = cy + p.y * scale;
+                        if (projX > -100 && projX < bbCanvas.width + 100 && projY > -100 && projY < bbCanvas.height + 100) {
+                            let alpha = mapRange(p.z, 0, 2000, 1, 0); 
+                            bbCtx.fillStyle = Math.random() > 0.9 ? `rgba(255, 255, 255, ${alpha})` : `rgba(0, 229, 255, ${alpha})`;
+                            bbCtx.font = `bold ${Math.max(8, 20 * scale)}px monospace`; bbCtx.fillText(p.char, projX, projY);
+                        }
+                    });
+                    if (elapsed > 1600) { let whiteoutAlpha = (elapsed - 1600) / 600; bbCtx.fillStyle = `rgba(255, 255, 255, ${whiteoutAlpha})`; bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height); }
+                    bbCtx.globalCompositeOperation = 'source-over';
+                } else {
+                    bbCtx.fillStyle = "rgba(0, 0, 0, 0.2)"; bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height); bbCtx.font = "8px monospace"; 
+                    bgCodes.forEach(c => {
+                        if(Math.random() > 0.95) c.char = hexChars[Math.floor(Math.random() * 16)];
+                        bbCtx.fillStyle = `rgba(0, 229, 255, ${c.alpha * (0.3 + Math.sin(time*3)*0.7)})`;
+                        bbCtx.fillText(c.char, c.x + p2MouseX * 25, c.y + p2MouseY * 25);
+                    });
+                    bbCtx.globalCompositeOperation = 'lighter'; const gridSize = 5, radius = 190;
+                    for (let x = -radius; x < radius; x += gridSize) {
+                        for (let y = -radius; y < radius; y += gridSize) {
+                            const dist = Math.sqrt(x * x + y * y);
+                            if (dist < radius - 10 + Math.sin(time * 2) * 20) {
+                                const alpha = (Math.random() * 0.15 + 0.1) * (Math.sin(dist * 0.04 - time * 4) * 0.5 + 0.5) * mapRange(dist, radius-60, radius, 1, 0);
+                                bbCtx.fillStyle = `rgba(0, 229, 255, ${Math.max(0, alpha)})`; bbCtx.fillRect(cx + x, cy + y, gridSize - 0.5, gridSize - 0.5);
+                            }
+                        }
+                    }
+                    bbCtx.globalCompositeOperation = 'source-over';
+                    bbCtx.fillStyle = `rgba(0, 229, 255, ${Math.max(0.1, 0.4 + Math.sin(time * 3) * 0.6)})`;
+                    bbCtx.font = "bold 13px monospace"; bbCtx.textAlign = "center"; bbCtx.textBaseline = "middle"; bbCtx.fillText("[点击中央]", cx, cy); bbCtx.textAlign = "left"; bbCtx.textBaseline = "alphabetic";
+                }
+            }
+
+            function mapRange(value, inMin, inMax, outMin, outMax) { return outMin + (outMax - outMin) * (Math.max(inMin, Math.min(inMax, value)) - inMin) / (inMax - inMin); }
+
+            function animateP2() {
+                if (!isPaused && p2Wrapper.classList.contains('active')) {
+                    const scrollableHeight = p2Wrapper.scrollHeight - p2Wrapper.clientHeight;
+                    const scroll = scrollableHeight > 0 ? (p2Wrapper.scrollTop / scrollableHeight) : 0;
+                    const time = Date.now() * 0.001; svg.innerHTML = ''; drawSingularity(scroll);
+
+                    if (scroll <= 0.99) {
+                        world.style.transform = `rotateY(${p2MouseX * 6}deg) rotateX(${-p2MouseY * 6}deg)`;
+                        const currentFrameData = fragments.map((f, i) => {
+                            const isCoding = scroll > 0.92; const baseShrink = 1 - Math.pow(scroll, 2.2); 
+                            const suckFactor = isCoding ? Math.pow(1 - (scroll - 0.92) / 0.08, 2.5) : baseShrink;
+                            const angle = Math.atan2(f.y, f.x) + time * 0.15 + scroll * 6;
+                            const curX = Math.cos(angle) * Math.sqrt(f.x*f.x + f.y*f.y) * suckFactor; const curY = Math.sin(angle) * Math.sqrt(f.x*f.x + f.y*f.y) * suckFactor; const curZ = f.z * suckFactor;
+                            const p = getProjectedPos(curX, curY, curZ); let focusZ = 0, focusScale = 1;
+                            if (!isCoding && p.visible) {
+                                const dM = Math.sqrt(Math.pow((p.x - window.innerWidth / 2) / (window.innerWidth / 2) - p2MouseX, 2) + Math.pow((p.y - window.innerHeight / 2) / (window.innerHeight / 2) - p2MouseY, 2));
+                                if (dM < 0.4) { focusScale = 1 + (0.4 - dM) / 0.4 * 0.6; focusZ = (0.4 - dM) / 0.4 * 500; }
+                            }
+                            let opacity = isCoding ? mapRange(scroll, 0.92, 0.98, 1, 0) : (baseShrink + 0.2);
+                            if (!isCoding && (p.zVal > 850 || p.x < -window.innerWidth * 0.1 || p.x > window.innerWidth * 1.1 || p.y < -window.innerHeight * 0.1 || p.y > window.innerHeight * 1.1)) opacity = 0; 
+
+                            if (isCoding) {
+                                if (!f.isConverted) { f.el.style.backgroundImage = 'none'; f.el.style.backgroundColor = 'rgba(0, 20, 10, 0.8)'; f.el.style.borderColor = 'var(--accent)'; f.el.style.boxShadow = `0 0 15px var(--accent)`; f.isConverted = true; }
+                                f.el.innerText = Math.random() > 0.5 ? "1" : "0";
+                            } else {
+                                if (f.isConverted) { f.el.style.backgroundImage = `url(${f.originUrl})`; f.el.style.backgroundColor = '#111'; f.el.style.borderColor = 'rgba(255,255,255,0.3)'; f.el.style.boxShadow = `none`; f.el.innerText = ""; f.isConverted = false; }
+                            }
+                            const finalZ = curZ + focusZ;
+                            f.el.style.transform = `translate3d(${curX}px, ${curY}px, ${finalZ}px) rotateX(${f.rotX + scroll * 720}deg) rotateY(${f.rotY + scroll * 720}deg) scale(${suckFactor * focusScale})`;
+                            f.el.style.opacity = opacity; f.el.style.display = opacity <= 0.01 ? 'none' : 'flex';
+                            return { x: curX, y: curY, z: finalZ, opacity: opacity, visible: p.visible };
+                        });
+
+                        if (scroll < 0.92) {
+                            connections.forEach(([source, target]) => {
+                                const s = currentFrameData[source], t = currentFrameData[target];
+                                if (s && t && s.opacity > 0.1 && t.opacity > 0.1) {
+                                    const p1 = getProjectedPos(s.x, s.y, s.z), p2 = getProjectedPos(t.x, t.y, t.z);
+                                    if (p1.visible && p2.visible) {
+                                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                                        line.setAttribute("x1", p1.x); line.setAttribute("y1", p1.y); line.setAttribute("x2", p2.x); line.setAttribute("y2", p2.y); line.setAttribute("stroke", `rgba(0, 229, 255, ${0.15 * (1 - scroll)})`);
+                                        svg.appendChild(line);
+                                    }
+                                }
+                            });
+                        }
+                    }
+
+                    if (scroll > 0.94) {
+                        if (!bbActive) { bbActive = true; bbLayer.style.display = 'block'; setTimeout(() => bbLayer.style.opacity = 1, 50); uiInstruction.innerText = ""; }
+                        drawBlackboxFrame(time);
+                    } else {
+                        if (bbActive) { bbActive = false; isExploding = false; bbLayer.style.opacity = 0; uiInstruction.innerText = "> 鼠标滚动浏览_"; setTimeout(() => bbLayer.style.display = 'none', 1000); }
+                    }
+                }
+                requestAnimationFrame(animateP2);
+            }
+
+            window.showDetail = function(i) { 
+                isPaused = true; document.getElementById('detail-overlay').style.display = 'flex'; 
+                document.getElementById('t-img').src = fragments[i].data.url; document.getElementById('t-title').innerText = fragments[i].data.title; hoverTooltip.style.display = 'none'; 
+            }
+            window.closeDetail = function() { document.getElementById('detail-overlay').style.display = 'none'; isPaused = false; }
+            loadExcelData();
+        };
+
+
+        // ================= PAGE 3: 终端解构实验室 =================
+        window.labInit = false;
+        window.initLab = function() {
+            const canvas = document.getElementById('labCanvas'); const ctx = canvas.getContext('2d'); const v1 = document.getElementById('v1');
+            let width, height; const vLines = [], hLines = [], glitchTexts = []; let rainLayers = [[], [], []]; 
+            const sampleSize = { w: 160, h: 90 }; const sCanvas = document.createElement('canvas');
+            sCanvas.width = sampleSize.w; sCanvas.height = sampleSize.h; const sCtx = sCanvas.getContext('2d', { willReadFrequently: true });
+            const colorPalette = [ { r: 255, g: 30, b: 30 }, { r: 255, g: 100, b: 0 }, { r: 0, g: 255, b: 150 }, { r: 0, g: 180, b: 255 }, { r: 180, g: 100, b: 255 } ];
+            const charSet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ<>?/_-$#@!&*";
+            const densityBuckets = [" ", ".-:,", "17+~=", "2345*%", "60$&x?", "89@#WM"];
+            const keywords = [ "PEKING OPERA FACIAL MAKEUP", "SHENG", "DAN", "JING", "CHOU", "WATER SLEEVES", "ARTIFICIAL BEARD", "PHEASANT FEATHERS", "THICK-SOLED BOOTS", "FAN", "THE DRUNKEN BEAUTY", "FAREWELL MY CONCUBINE", "WAITING...", "DATA LINK", "SYSTEM WAKE", "WUSHENG ARMOR", "DAOMADAN", "PHOENIX CROWN", "PYTHON ROBE", "DIANCUI", "STRIKING POSE", "SPOTLIGHT", "WAKING", "FETCHING", "ENCODING", "PARSING", "GENAI", "DIFFUSION", "MULTIMODAL", "VR/AR" ];
+            let corsErrorTriggered = false;
+
+            let labMouseX = window.innerWidth / 2, labMouseY = window.innerHeight / 2, labTargetMouseX = labMouseX, labTargetMouseY = labMouseY;
+
+            window.addEventListener('mousemove', (e) => {
+                if (document.getElementById('lab-wrapper').classList.contains('active')) { labTargetMouseX = e.clientX; labTargetMouseY = e.clientY; }
+            });
+
+            function createGlitch() {
+                const kw = Math.random() > 0.3 ? keywords[Math.floor(Math.random() * keywords.length)] : "";
+                let startX = Math.random() * width * 0.8 + width * 0.1; let startY = Math.random() * height * 0.8 + height * 0.1;
+                return { x: startX, y: startY, targetX: startX, targetY: startY, state: 'paused', pauseTimer: 10 + Math.floor(Math.random() * 20), size: 16 + Math.random() * 20, segmentsList: [], life: 0, maxLife: kw !== "" ? 120 : (70 + Math.random() * 40), lineCount: 2 + Math.floor(Math.random() * 2), keyword: kw, keywordLine: kw !== "" ? Math.floor(Math.random() * 2) : -1 };
+            }
+
+            function initLabSize() {
+                width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; ctx.imageSmoothingEnabled = false;
+                labTargetMouseX = labMouseX = width / 2; labTargetMouseY = labMouseY = height / 2;
+                vLines.length = 0; hLines.length = 0; glitchTexts.length = 0;
+                for(let i=0; i<20; i++) vLines.push({basePos:(Math.random()-0.5)*40, z:Math.random()*1000, speed:3+Math.random()*5});
+                for(let i=0; i<20; i++) hLines.push({basePos:(Math.random()-0.5)*30, z:Math.random()*1000, speed:3+Math.random()*5});
+                for(let i=0; i<4; i++) glitchTexts.push(createGlitch()); 
+                rainLayers = [[], [], []];
+                let currentX = 0; while(currentX < width + 100) { rainLayers[0].push({ x: currentX, yOffset: Math.random() * 1000, speed: 0.04 + Math.random() * 0.02 }); currentX += 15 + Math.random() * 25; }
+                currentX = 0; while(currentX < width + 100) { rainLayers[1].push({ x: currentX, yOffset: Math.random() * 1000, speed: 0.08 + Math.random() * 0.04 }); currentX += 30 + Math.random() * 30; }
+                currentX = 0; while(currentX < width + 100) { rainLayers[2].push({ x: currentX, yOffset: Math.random() * 1000, speed: 0.15 + Math.random() * 0.08 }); currentX += 50 + Math.random() * 60; }
+            }
+
+            window.addEventListener('resize', () => { if (document.getElementById('lab-wrapper').classList.contains('active')) { initLabSize(); } });
+
+            function drawDigitalRain(time, color) {
+                ctx.textAlign = "left"; const configs = [ { font: "10px monospace", alpha: 0.15, yStep: 14 }, { font: "12px monospace", alpha: 0.25, yStep: 18 }, { font: "14px monospace", alpha: 0.35, yStep: 22 } ];
+                rainLayers.forEach((layer, index) => {
+                    const conf = configs[index]; ctx.font = conf.font; ctx.fillStyle = `rgba(${color.r},${color.g},${color.b}, ${conf.alpha})`;
+                    layer.forEach(col => {
+                        for(let y = -100; y < height + 100; y += conf.yStep) {
+                            let fallY = (y + time * col.speed + col.yOffset) % (height + 200) - 100; 
+                            ctx.fillText((Math.floor(col.x + fallY + time/200) % 2).toString(), col.x, fallY);
+                        }
+                    });
+                });
+            }
+
+            function getPixelData(video) {
+                if (video.readyState < 2) return null;
+                try { sCtx.drawImage(video, 0, 0, sampleSize.w, sampleSize.h); return sCtx.getImageData(0, 0, sampleSize.w, sampleSize.h).data; } 
+                catch (error) { corsErrorTriggered = true; return null; }
+            }
+
+            function drawAsciiLayer(pixelData, alpha, color, scaleFactor = 1, offsetX = 0, offsetY = 0) {
+                if (!pixelData) return;
+                const renderWidth = width * scaleFactor; const renderHeight = height * scaleFactor;
+                const cellW = renderWidth / sampleSize.w; const cellH = renderHeight / sampleSize.h;
+                const x3d_start = width/2 - renderWidth / 2 + offsetX; const y3d_start = height/2 - renderHeight / 2 + offsetY;
+                ctx.font = `bold ${cellW * 1.2}px 'Courier New', monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                for(let y=0; y<sampleSize.h; y++) {
+                    for(let x=0; x<sampleSize.w; x++) {
+                        const i = (y * sampleSize.w + x) * 4; const brightness = Math.min(255, ((pixelData[i] + pixelData[i+1] + pixelData[i+2]) / 3) * 1.1);
+                        if (brightness > 20) {
+                            let bucketIndex = Math.max(0, Math.min(densityBuckets.length - 1, Math.floor((brightness / 255) * (densityBuckets.length - 1)))); 
+                            const char = densityBuckets[bucketIndex][Math.floor(Math.random() * densityBuckets[bucketIndex].length)];
+                            ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${alpha})`; ctx.fillText(char, x3d_start + x * cellW + cellW/2, y3d_start + y * cellH + cellH/2);
+                        }
+                    }
+                }
+            }
+
+            function drawProgressBar(time) {
+                if (!v1.duration) return;
+                let pct = (v1.currentTime / v1.duration) * 100;
+
+                if (pct >= 99 && !window.isUnlocked) {
+                    window.isUnlocked = true;
+                    const finalScreen = document.getElementById('finalScreen');
+                    finalScreen.style.opacity = 1; finalScreen.style.pointerEvents = 'auto';
+
+                    if (!window.isTyping) {
+                        window.isTyping = true;
+                        setTimeout(() => {
+                            const cnTextEl = document.getElementById('cnText'); cnTextEl.innerHTML = ""; const cnString = "准备生成"; let cnI = 0;
+                            window.cnInterval = setInterval(() => {
+                                cnTextEl.innerHTML += cnString.charAt(cnI); cnI++;
+                                if (cnI >= cnString.length) {
+                                    clearInterval(window.cnInterval); cnTextEl.innerHTML += '<span class="blinking-dots">...</span>';
+                                    setTimeout(() => {
+                                        const enTextEl = document.getElementById('enText'); enTextEl.innerHTML = ""; const enString = "Peking Opera"; let enI = 0;
+                                        window.enInterval = setInterval(() => {
+                                            enTextEl.innerHTML += enString.charAt(enI); enI++;
+                                            if (enI >= enString.length) {
+                                                clearInterval(window.enInterval);
+                                                setTimeout(() => { document.getElementById('blinkingArrowKey').style.display = 'inline-block'; }, 1500); 
+                                            }
+                                        }, 120); 
+                                    }, 1000); 
+                                }
+                            }, 120); 
+                        }, 2000); 
+                    }
+                }
+                
+                if (window.isUnlocked) pct = 100;
+                const barWidth = Math.min(600, width * 0.8); const barHeight = 12; 
+                const x = width / 2 - barWidth / 2; const y = height - 100; const sysColor = "rgba(255, 255, 255, 0.9)";
+                
+                ctx.fillStyle = sysColor; ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.font = "bold 18px 'Silkscreen', monospace"; ctx.fillText(`${pct.toFixed(1)}%`, x + barWidth, y - 8);
+                ctx.strokeStyle = sysColor; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, barWidth, barHeight);
+                const blockWidth = 8; const blockSpacing = 3; const fillWidth = (pct / 100) * (barWidth - 4); 
+                
+                ctx.fillStyle = sysColor;
+                for(let bx = 2; bx < fillWidth; bx += (blockWidth + blockSpacing)) { ctx.fillRect(x + bx, y + 2, Math.min(blockWidth, fillWidth - bx), barHeight - 4); }
+
+                ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.font = "16px 'HYPixel', monospace"; let statusText = "";
+                if (window.isUnlocked) { statusText = "> [ 系统就绪 ] 正在接入生成界面..."; } 
+                else {
+                    if (pct < 30) statusText = `> [ 抓取信息 ] 正在提取视觉特征...`;
+                    else if (pct < 60) statusText = `> [ 编码信息 ] 正在转换数据...`;
+                    else if (pct < 95) statusText = `> [ 机器学习 ] 迭代轮次 [ ${Math.floor(((pct - 60) / 35) * 1000) + 1} / 1000 ]...`;
+                    else statusText = `> [ 训练完成 ] 正在保存节点...`;
+                }
+                ctx.fillText(statusText, x, y + barHeight + 12); 
+            }
+
+            function drawLab(time) {
+                if (!document.getElementById('lab-wrapper').classList.contains('active')) { requestAnimationFrame(drawLab); return; }
+
+                labMouseX += (labTargetMouseX - labMouseX) * 0.05; labMouseY += (labTargetMouseY - labMouseY) * 0.05;
+                let mouseOffsetX = (labMouseX - width / 2); let mouseOffsetY = (labMouseY - height / 2);
+
+                ctx.fillStyle = "black"; ctx.fillRect(0, 0, width, height);
+
+                const cycleDuration = 15000; const interval = cycleDuration / colorPalette.length; 
+                const index = Math.floor((time % cycleDuration) / interval); const nextIndex = (index + 1) % colorPalette.length; const ratio = ((time % cycleDuration) % interval) / interval;
+                const curCol = { r: Math.round(colorPalette[index].r * (1 - ratio) + colorPalette[nextIndex].r * ratio), g: Math.round(colorPalette[index].g * (1 - ratio) + colorPalette[nextIndex].g * ratio), b: Math.round(colorPalette[index].b * (1 - ratio) + colorPalette[nextIndex].b * ratio) };
+
+                drawDigitalRain(time, curCol);
+
+                const pixelData = getPixelData(v1);
+                if (pixelData) {
+                    drawAsciiLayer(pixelData, 0.3, curCol, 0.75, 40 - mouseOffsetX * 0.03, -mouseOffsetY * 0.03);
+                    drawAsciiLayer(pixelData, 0.9, curCol, 1.0, -mouseOffsetX * 0.08, -mouseOffsetY * 0.08);
+                }
+
+                const cx = width/2 - mouseOffsetX * 0.15; const cy = height/2 - mouseOffsetY * 0.15; const fov = 500;
+                [vLines, hLines].forEach((group, idx) => {
+                    group.forEach(l => {
+                        l.z -= l.speed; if(l.z<=0) l.z=1000;
+                        const scale = fov/(fov+l.z); const a = Math.max(0, (1-l.z/1000)*0.5); 
+                        ctx.strokeStyle = `rgba(${curCol.r},${curCol.g},${curCol.b},${a})`; ctx.lineWidth = 2; ctx.beginPath();
+                        if(idx===0){ let x = cx + l.basePos*60*scale; ctx.moveTo(x,0); ctx.lineTo(x,height); l.px=x; } else{ let y = cy + l.basePos*50*scale; ctx.moveTo(0,y); ctx.lineTo(width,y); l.py=y; }
+                        ctx.stroke(); l.pa = a;
+                    });
+                });
+
+                vLines.forEach(vl => hLines.forEach(hl => {
+                    if(Math.abs(vl.z-hl.z)<30){
+                        let a = Math.min(vl.pa, hl.pa)*1.5;
+                        if(a>0.1) { ctx.fillStyle = `rgba(${curCol.r},${curCol.g},${curCol.b},${a})`; ctx.fillRect(vl.px-2, hl.py-2, 4, 4); }
+                    }
+                }));
+
+                glitchTexts.forEach((g, i) => {
+                    g.life++;
+                    if (g.state === 'paused') {
+                        if (Math.hypot(g.x - labMouseX, g.y - labMouseY) < 150) {
+                            g.state = 'moving';
+                            let escapeAngle = Math.atan2(g.y - labMouseY, g.x - labMouseX); let escapeDist = 250 + Math.random() * 200; 
+                            g.targetX = Math.max(100, Math.min(width - 100, g.x + Math.cos(escapeAngle) * escapeDist)); g.targetY = Math.max(100, Math.min(height - 100, g.y + Math.sin(escapeAngle) * escapeDist));
+                        } else {
+                            g.pauseTimer--;
+                            if (g.pauseTimer <= 0) {
+                                g.state = 'moving'; let angle = Math.random() * Math.PI * 2; let dist = 250 + Math.random() * 350; 
+                                g.targetX = Math.max(100, Math.min(width - 100, g.x + Math.cos(angle) * dist)); g.targetY = Math.max(100, Math.min(height - 100, g.y + Math.sin(angle) * dist));
+                            }
+                        }
+                    } else if (g.state === 'moving') {
+                        g.x += (g.targetX - g.x) * 0.4; g.y += (g.targetY - g.y) * 0.4;
+                        if (Math.hypot(g.targetX - g.x, g.targetY - g.y) < 2) { g.x = g.targetX; g.y = g.targetY; g.state = 'paused'; g.pauseTimer = 9999; }
+                    }
+
+                    if (g.life >= g.maxLife) { glitchTexts[i] = createGlitch(); return; }
+
+                    if(g.life % 4 === 0) {
+                        g.segmentsList = []; const lineLen = 22; 
+                        for(let r=0; r<g.lineCount; r++){
+                            let lineSegments = [];
+                            if (g.keyword !== "" && r === g.keywordLine) {
+                                let startPos = Math.floor((lineLen - g.keyword.length) / 2); let prefix = ""; for(let c=0; c<startPos; c++) prefix += charSet[Math.floor(Math.random()*charSet.length)];
+                                if(prefix) lineSegments.push({ text: prefix, isBox: false }); lineSegments.push({ text: g.keyword, isBox: true });
+                                let suffix = ""; for(let c=startPos+g.keyword.length; c<lineLen; c++) suffix += charSet[Math.floor(Math.random()*charSet.length)];
+                                if(suffix) lineSegments.push({ text: suffix, isBox: false });
+                            } else {
+                                if (Math.random() < 0.15) {
+                                    let boxLen = 3 + Math.floor(Math.random() * 5); let startPos = Math.floor(Math.random() * (lineLen - boxLen));
+                                    let prefix = ""; for(let c=0; c<startPos; c++) prefix += charSet[Math.floor(Math.random()*charSet.length)];
+                                    if(prefix) lineSegments.push({ text: prefix, isBox: false });
+                                    let boxText = ""; for(let c=0; c<boxLen; c++) boxText += charSet[Math.floor(Math.random()*charSet.length)]; lineSegments.push({ text: boxText, isBox: true });
+                                    let suffix = ""; for(let c=startPos+boxLen; c<lineLen; c++) suffix += charSet[Math.floor(Math.random()*charSet.length)];
+                                    if(suffix) lineSegments.push({ text: suffix, isBox: false });
+                                } else {
+                                    let s = ""; for(let c=0; c<lineLen; c++) s += charSet[Math.floor(Math.random()*charSet.length)]; lineSegments.push({ text: s, isBox: false });
+                                }
+                            }
+                            g.segmentsList.push(lineSegments);
+                        }
+                    }
+
+                    let a = Math.random() > 0.05 ? 1 : 0.5; ctx.textBaseline = 'middle'; ctx.font = `bold ${g.size}px 'Silkscreen', monospace`;
+
+                    g.segmentsList.forEach((lineSegments, li) => {
+                        let ty = g.y + li*(g.size+10); let totalWidth = 0;
+                        lineSegments.forEach(seg => { totalWidth += ctx.measureText(seg.text).width; }); let currentX = g.x - totalWidth / 2;
+                        lineSegments.forEach(seg => {
+                            let segW = ctx.measureText(seg.text).width; ctx.textAlign = 'left'; 
+                            if (seg.isBox) {
+                                ctx.fillStyle = `rgba(${curCol.r},${curCol.g},${curCol.b},${a * 0.9})`; let padX = 4, padY = Math.floor(g.size * 0.4);
+                                ctx.fillRect(Math.floor(currentX - padX), Math.floor(ty - g.size/2 - padY), Math.ceil(segW + padX*2), Math.ceil(g.size + padY*2));
+                                ctx.fillStyle = "black"; ctx.fillText(seg.text, currentX, ty); 
+                            } else { ctx.fillStyle = `rgba(${curCol.r},${curCol.g},${curCol.b},${a * 0.7})`; ctx.fillText(seg.text, currentX, ty); }
+                            currentX += segW;
+                        });
+                    });
+                });
+
+                drawProgressBar(time);
+
+                if (corsErrorTriggered) {
+                    ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0, height/2 - 60, width, 120);
+                    ctx.fillStyle = "#ff3333"; ctx.font = "bold 24px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.fillText("⚠️ 跨域安全限制 (CORS Error) 拦截了视频读取 ⚠️", width/2, height/2 - 15);
+                    ctx.fillStyle = "#ffffff"; ctx.font = "16px monospace";
+                    ctx.fillText("请确认你是通过 Live Server 打开的网页！", width/2, height/2 + 20);
+                }
+
+                requestAnimationFrame(drawLab);
+            }
+
+            initLabSize(); v1.play(); requestAnimationFrame(drawLab);
+        };
+
+
+        // ================= PAGE 4: 矩阵崩溃层 =================
+        window.p4Init = false;
+        window.initPage4 = function() {
+            const networkCanvas = document.getElementById('networkCanvas');
+            const networkCtx = networkCanvas.getContext('2d');
+            const p4Wrapper = document.getElementById('page4-wrapper');
+
+            let width, height;
+            let nodes = [];
+            const images = []; 
+            
+            const TOTAL_IMAGES = 350;     
+            const DISPLAY_NODES = 120;    
+            const MAX_DISTANCE = 180;     
+            const NODE_SIZE_MIN = 40;     
+            const NODE_SIZE_MAX = 220;    
+            const GLITCH_CHANCE = 0.008;  
+            const SPEED_MULTIPLIER = 2.0; 
+            const TRACKING_CHANCE = 0.06; 
+            
+            const MATRIX_WHITE = '255, 255, 255'; 
+            const EXPLOSION_COLORS = ['255, 0, 77', '0, 229, 255', '255, 255, 255'];
+
+            let startTime = 0;
+            const EXPLODE_TIME = 5000; 
+            const FADE_START_TIME = 3500; 
+
+            let systemState = 'NORMAL'; 
+            let explodeStartTime = 0;
+            let particles = []; 
+
+            function resize() {
+                if (!p4Wrapper.classList.contains('active')) return;
+                width = window.innerWidth;
+                height = window.innerHeight;
+                networkCanvas.width = width;
+                networkCanvas.height = height;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            class NoiseParticle {
+                constructor(x, y, isNodeCore) {
+                    this.x = x; this.y = y;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = isNodeCore ? (Math.random() * 4.5 + 0.5) : (Math.random() * 1.5 + 0.2);
+                    this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
+                    this.size = Math.random() * 1.5 + 0.5; 
+                    this.color = EXPLOSION_COLORS[Math.floor(Math.random() * EXPLOSION_COLORS.length)];
+                    this.timeOffset = Math.random() * 1000;
+                    this.flickerSpeed = Math.random() * 0.15 + 0.05; 
+                }
+                update(globalTime) { 
+                    const driftX = Math.sin(this.y * 0.02 + globalTime) * 0.3; const driftY = Math.cos(this.x * 0.02 + globalTime) * 0.3;
+                    this.x += this.vx + driftX; this.y += this.vy + driftY; 
+                    if (systemState === 'FADING_OUT') { this.vx *= 0.85; this.vy *= 0.85; } else { this.vx *= 0.92; this.vy *= 0.92; }
+                }
+                draw(globalTime) {
+                    const breathing = 0.5 + 0.5 * Math.sin(globalTime * 10 * this.flickerSpeed + this.timeOffset);
+                    const noiseJitter = Math.random() * 0.4; 
+                    const alpha = Math.min(1, breathing + noiseJitter) * 0.85;
+                    networkCtx.fillStyle = `rgba(${this.color}, ${alpha})`; networkCtx.fillRect(this.x, this.y, this.size, this.size);
+                }
+            }
+
+            class Node {
+                constructor(img) {
+                    this.img = img; this.x = Math.random() * width; this.y = Math.random() * height;
+                    this.vx = (Math.random() - 0.5) * SPEED_MULTIPLIER; this.vy = (Math.random() - 0.5) * SPEED_MULTIPLIER;
+                    this.baseSize = Math.random() * (NODE_SIZE_MAX - NODE_SIZE_MIN) + NODE_SIZE_MIN;
+                    this.alpha = Math.random(); this.fadeDir = Math.random() > 0.5 ? 1 : -1; this.fadeSpeed = Math.random() * 0.015 + 0.005; 
+                    this.isGlitching = false; this.glitchTimer = 0; this.isTracking = false; this.trackingTimer = 0; this.trackBoxes = []; 
+                }
+                update() {
+                    this.x += this.vx; this.y += this.vy;
+                    if (this.x < 0 || this.x > width) this.vx *= -1; if (this.y < 0 || this.y > height) this.vy *= -1;
+                    this.alpha += this.fadeDir * this.fadeSpeed;
+                    if (this.alpha >= 1) { this.alpha = 1; if (Math.random() < 0.015) { this.fadeDir = -1; this.isTracking = false; }
+                    } else if (this.alpha <= 0) { this.alpha = 0; if (images.length > 0) this.img = images[Math.floor(Math.random() * images.length)]; this.baseSize = Math.random() * (NODE_SIZE_MAX - NODE_SIZE_MIN) + NODE_SIZE_MIN; this.isTracking = false; if (Math.random() < 0.03) { this.fadeDir = 1; } }
+                    if (!this.isGlitching && Math.random() < GLITCH_CHANCE) { this.isGlitching = true; this.glitchTimer = 10; }
+                    if (this.isGlitching) { this.glitchTimer--; if (this.glitchTimer <= 0) this.isGlitching = false; }
+                    if (this.alpha > 0.3 && !this.isTracking && Math.random() < TRACKING_CHANCE) {
+                        this.isTracking = true; this.trackingTimer = Math.random() * 40 + 20; const numBoxes = Math.floor(Math.random() * 4) + 2; this.trackBoxes = [];
+                        for(let i=0; i<numBoxes; i++) { this.trackBoxes.push({ offsetX: (Math.random() - 0.5) * 0.9, offsetY: (Math.random() - 0.5) * 0.9, wRate: Math.random() * 0.3 + 0.1, hRate: Math.random() * 0.3 + 0.1, value: Math.random().toFixed(6) }); }
+                    }
+                    if (this.isTracking) { this.trackingTimer--; if (this.trackingTimer % 2 === 0) { this.trackBoxes.forEach(box => { box.value = Math.random().toFixed(6); box.offsetX += (Math.random() - 0.5) * 0.04; box.offsetY += (Math.random() - 0.5) * 0.04; }); } if (this.trackingTimer <= 0) this.isTracking = false; }
+                }
+                draw() {
+                    if (this.alpha <= 0 || !this.img.complete || this.img.naturalWidth === 0) return;
+                    networkCtx.save();
+                    const safeWidth = this.img.width || 100; const safeHeight = this.img.height || 100; const imgRatio = safeWidth / safeHeight;
+                    let drawW, drawH; if (imgRatio > 1) { drawW = this.baseSize; drawH = this.baseSize / imgRatio; } else { drawH = this.baseSize; drawW = this.baseSize * imgRatio; }
+                    const halfW = drawW / 2; const halfH = drawH / 2; this.currentDrawW = drawW; this.currentDrawH = drawH;
+                    if (this.isGlitching) {
+                        const offsetX = (Math.random() - 0.5) * 20; const offsetY = (Math.random() - 0.5) * 20;
+                        networkCtx.globalAlpha = 0.8 * this.alpha; networkCtx.drawImage(this.img, this.x - halfW + offsetX, this.y - halfH + offsetY, drawW, drawH);
+                        networkCtx.globalCompositeOperation = 'lighter'; networkCtx.fillStyle = `rgba(${MATRIX_WHITE}, ${0.4 * this.alpha})`; networkCtx.fillRect(this.x - halfW - 2, this.y - halfH - 2, drawW + 4, drawH + 4);
+                    } else { networkCtx.globalAlpha = this.alpha; networkCtx.drawImage(this.img, this.x - halfW, this.y - halfH, drawW, drawH); }
+                    networkCtx.globalCompositeOperation = 'source-over';
+                    if (this.isTracking) {
+                        networkCtx.strokeStyle = `rgba(${MATRIX_WHITE}, ${0.9 * this.alpha})`; networkCtx.lineWidth = 0.8;
+                        networkCtx.beginPath(); networkCtx.moveTo(this.x, this.y - 12); networkCtx.lineTo(this.x, this.y + 12); networkCtx.moveTo(this.x - 12, this.y); networkCtx.lineTo(this.x + 12, this.y); networkCtx.stroke();
+                        networkCtx.font = 'bold 11px monospace'; 
+                        this.trackBoxes.forEach(box => {
+                            const bx = this.x + box.offsetX * drawW; const by = this.y + box.offsetY * drawH; const bw = box.wRate * drawW; const bh = box.hRate * drawH; const halfBw = bw / 2; const halfBh = bh / 2;
+                            const boxColorStr = `rgba(${MATRIX_WHITE}, ${0.9 * this.alpha})`; const lineToBoxColorStr = `rgba(${MATRIX_WHITE}, ${0.4 * this.alpha})`;
+                            networkCtx.strokeStyle = boxColorStr; networkCtx.lineWidth = 1.2; networkCtx.strokeRect(bx - halfBw, by - halfBh, bw, bh);
+                            networkCtx.beginPath(); networkCtx.moveTo(this.x, this.y); networkCtx.lineTo(bx - halfBw, by - halfBh); networkCtx.strokeStyle = lineToBoxColorStr; networkCtx.stroke();
+                            networkCtx.fillStyle = boxColorStr; const textJitter = Math.random() > 0.5 ? 1.5 : 0; networkCtx.fillText(box.value, bx - halfBw + textJitter, by - halfBh - 5 + textJitter);
+                        });
+                    } else { networkCtx.strokeStyle = `rgba(${MATRIX_WHITE}, ${0.3 * this.alpha})`; networkCtx.lineWidth = 1; networkCtx.strokeRect(this.x - halfW - 1, this.y - halfH - 1, drawW + 2, drawH + 2); }
+                    networkCtx.restore();
+                }
+            }
+
+            let loadedImagesCount = 0;
+            for (let i = 1; i <= TOTAL_IMAGES; i++) {
+                const img = new Image();
+                img.onload = () => { loadedImagesCount++; images.push(img); if (loadedImagesCount === TOTAL_IMAGES) initNodes(); };
+                img.onerror = () => { loadedImagesCount++; if (loadedImagesCount === TOTAL_IMAGES) initNodes(); }
+                img.src = `${i}.jpg`; 
+            }
+
+            function initNodes() {
+                if (images.length === 0) return; nodes = [];
+                for (let i = 0; i < DISPLAY_NODES; i++) { nodes.push(new Node(images[Math.floor(Math.random() * images.length)])); }
+                startTime = Date.now(); systemState = 'NORMAL';
+            }
+
+            function triggerExplosion() {
+                systemState = 'EXPLODING'; explodeStartTime = Date.now();
+                networkCtx.fillStyle = 'rgba(255, 255, 255, 0.9)'; networkCtx.fillRect(0, 0, width, height);
+                nodes.forEach(node => { if (node.alpha > 0) { for (let i = 0; i < 400; i++) { particles.push(new NoiseParticle(node.x + (Math.random() - 0.5) * (node.currentDrawW || 100), node.y + (Math.random() - 0.5) * (node.currentDrawH || 100), true)); } } });
+                for(let i = 0; i < 8000; i++) { particles.push(new NoiseParticle(Math.random() * width, Math.random() * height, false)); }
+                nodes = []; document.getElementById('p4-nav').style.opacity = '0'; 
+            }
+
+            function animate() {
+                if (!p4Wrapper.classList.contains('active')) { requestAnimationFrame(animate); return; }
+                const globalTime = Date.now() * 0.001;
+
+                if (systemState === 'NORMAL') {
+                    if (Date.now() - startTime >= EXPLODE_TIME && images.length > 0) { triggerExplosion(); requestAnimationFrame(animate); return; }
+                    networkCtx.fillStyle = 'rgba(0, 0, 0, 0.4)'; networkCtx.fillRect(0, 0, width, height); networkCtx.lineWidth = 0.8;
+                    for (let i = 0; i < nodes.length; i++) {
+                        if (nodes[i].alpha <= 0) continue;
+                        for (let j = i + 1; j < nodes.length; j++) {
+                            if (nodes[j].alpha <= 0) continue;
+                            const dx = nodes[i].x - nodes[j].x; const dy = nodes[i].y - nodes[j].y; const distSq = dx * dx + dy * dy;
+                            if (distSq < MAX_DISTANCE * MAX_DISTANCE) {
+                                const finalOpacity = (1 - (Math.sqrt(distSq) / MAX_DISTANCE)) * (Math.random() * 0.8 + 0.2) * Math.min(nodes[i].alpha, nodes[j].alpha);
+                                networkCtx.beginPath(); networkCtx.moveTo(nodes[i].x, nodes[i].y); networkCtx.lineTo(nodes[j].x, nodes[j].y); networkCtx.strokeStyle = `rgba(${MATRIX_WHITE}, ${finalOpacity * 0.4})`; networkCtx.stroke();
+                            }
+                        }
+                    }
+                    for (let i = 0; i < nodes.length; i++) { nodes[i].update(); nodes[i].draw(); }
+                } else if (systemState === 'EXPLODING' || systemState === 'FADING_OUT') {
+                    networkCtx.fillStyle = systemState === 'FADING_OUT' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.25)'; networkCtx.fillRect(0, 0, width, height);
+                    for (let i = 0; i < particles.length; i++) { particles[i].update(globalTime); particles[i].draw(globalTime); }
+                    
+                    let elapsedExplosion = Date.now() - explodeStartTime;
+                    if (systemState === 'EXPLODING' && elapsedExplosion > FADE_START_TIME) {
+                        systemState = 'FADING_OUT';
+                        p4Wrapper.style.transition = 'opacity 3s ease-in-out'; p4Wrapper.style.opacity = '0';
+                        
+                        setTimeout(() => { if (window.goToPage5) window.goToPage5(); }, 3000);
+                    }
+                }
+                requestAnimationFrame(animate);
+            }
+
+            window.resetPage4 = function() { 
+                p4Wrapper.style.transition = 'opacity 1s ease'; document.getElementById('p4-nav').style.opacity = '1';
+                nodes = []; particles = []; systemState = 'NORMAL'; networkCtx.clearRect(0, 0, width, height); initNodes(); 
+            };
+            requestAnimationFrame(animate);
+        };
+
+        // ================= PAGE 5: 全息重构与直接跳转第二部分 =================
+        window.p5Init = false;
+
+        window.initPage5 = function() {
+            const p5Wrapper = document.getElementById('page5-wrapper');
+            const p5CanvasContainer = document.getElementById('p5-canvas-container');
+            const p5UiLayer = document.getElementById('p5-ui-layer');
+            let animationId;
+
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.0028); 
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 3000);
+            camera.position.set(15, 25, 240);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            p5CanvasContainer.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.05;
+            controls.enablePan = false; controls.maxDistance = 350; controls.minDistance = 50;
+            controls.target.set(0, 0, 0);
+
+            function createDiamondTexture() {
+                const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16; const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(16, 8); ctx.lineTo(8, 16); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+                return new THREE.CanvasTexture(canvas);
+            }
+            const diamondTexture = createDiamondTexture();
+
+            function createGlowTexture() {
+                const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32; const ctx = canvas.getContext('2d');
+                const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)'); gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)'); 
+                gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)'); gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');         
+                ctx.fillStyle = gradient; ctx.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(canvas);
+            }
+            const glowTexture = createGlowTexture();
+
+            const gridSize = 1600, gridHeight = 150, step = 30; 
+            function createHalfMatrix(isTop) {
+                const group = new THREE.Group(); const halfSize = gridSize / 2;
+                const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+                const linePositions = [], nodePositions = []; 
+                for (let y = 0; y <= gridHeight; y += step) {
+                    const actualY = isTop ? y : -y; const isCenterPlane = (y === 0);
+                    for (let z = -halfSize; z <= halfSize; z += step) {
+                        for (let x = -halfSize; x <= halfSize; x += step) {
+                            if (isTop || !isCenterPlane) {
+                                nodePositions.push(x, actualY, z);
+                                if (x < halfSize) linePositions.push(x, actualY, z, x + step, actualY, z);
+                                if (z < halfSize) linePositions.push(x, actualY, z, x, actualY, z + step);
+                            }
+                            if (y < gridHeight) {
+                                const nextY = isTop ? y + step : -(y + step);
+                                linePositions.push(x, actualY, z, x, nextY, z);
+                            }
+                        }
+                    }
+                }
+                const linesGeo = new THREE.BufferGeometry(); linesGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                group.userData.origLine = new Float32Array(linePositions); group.add(new THREE.LineSegments(linesGeo, lineMat));
+                const nodeGeo = new THREE.BufferGeometry(); nodeGeo.setAttribute('position', new THREE.Float32BufferAttribute(nodePositions, 3));
+                group.userData.origNode = new Float32Array(nodePositions);
+                const nodeMat = new THREE.PointsMaterial({ size: 3.0, sizeAttenuation: false, map: diamondTexture, transparent: true, opacity: 0.8, alphaTest: 0.1, color: 0xffffff, depthWrite: false });
+                group.userData.nodeMat = nodeMat; group.add(new THREE.Points(nodeGeo, nodeMat));
+                return group;
+            }
+            const topHalf = createHalfMatrix(true), bottomHalf = createHalfMatrix(false); scene.add(topHalf); scene.add(bottomHalf);
+
+            const ambientGroup = new THREE.Group();
+            function initAmbientParticles() {
+                const colorsArr = [ [1.0, 0.1, 0.2], [1.0, 0.8, 0.1], [0.1, 0.4, 1.0] ];
+                for(let s = 1; s <= 3; s++) {
+                    const pos = [], col = [];
+                    for(let i = 0; i < 350; i++) { pos.push((Math.random() - 0.5) * 1600, (Math.random() - 0.5) * 1200, (Math.random() - 0.5) * 800 - 150); const c = colorsArr[Math.floor(Math.random() * 3)]; col.push(c[0], c[1], c[2]); }
+                    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+                    const mat = new THREE.PointsMaterial({ size: s * 4.0 + 2.5, vertexColors: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, map: glowTexture, depthWrite: false });
+                    const pts = new THREE.Points(geo, mat); pts.userData = { rx: (Math.random() - 0.5) * 0.05, ry: (Math.random() - 0.5) * 0.05 }; ambientGroup.add(pts);
+                }
+                scene.add(ambientGroup);
+            }
+            initAmbientParticles();
+
+            const scissors = [], pinchers = [];
+            for(let i=0; i<4; i++) {
+                let isTop = Math.random() > 0.5; let y = Math.floor(Math.random() * 3) * step; if (!isTop) y = -y;
+                pinchers.push({ pos: new THREE.Vector3((Math.random() - 0.5) * 150, y, (Math.random() - 0.5) * 150), target: new THREE.Vector3(), isTop: isTop, radius: 45, strength: 0.8 });
+                pinchers[i].target.copy(pinchers[i].pos);
+            }
+
+            function initDarningSystem() {
+                const scissorMat = new THREE.LineBasicMaterial({ color: 0xffffff }); 
+                for (let i = 0; i < 250; i++) {
+                    const sGroup = new THREE.Group();
+                    const b1 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.8, -0.8, 0), new THREE.Vector3(0.8, 0.8, 0)]), scissorMat);
+                    const b2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.8, 0.8, 0), new THREE.Vector3(0.8, -0.8, 0)]), scissorMat);
+                    sGroup.add(b1); sGroup.add(b2);
+                    let isSwarm = Math.random() < 0.8, assignedPincher = isSwarm ? pinchers[Math.floor(Math.random() * pinchers.length)] : null, isTop = assignedPincher ? assignedPincher.isTop : (Math.random() > 0.5);
+                    if (!isSwarm) { let y = Math.floor((Math.random() - 0.5) * 4) * step; isTop = y >= 0; sGroup.position.set((Math.random() - 0.5) * 350, y, (Math.random() - 0.5) * 350); } else { sGroup.position.copy(assignedPincher.pos); }
+                    (isTop ? topHalf : bottomHalf).add(sGroup);
+                    scissors.push({ group: sGroup, b1: b1, b2: b2, isSwarm: isSwarm, pincher: assignedPincher, isTop: isTop, angleX: Math.random() * Math.PI * 2, angleY: Math.random() * Math.PI * 2, angleZ: Math.random() * Math.PI * 2, speedX: 0.05 + Math.random() * 0.05, speedY: 0.02 + Math.random() * 0.03, speedZ: 0.05 + Math.random() * 0.05, radius: 8 + Math.random() * 10, blinkPhase: Math.random() * Math.PI * 2, blinkSpeed: 0.02 + Math.random() * 0.04 });
+                }
+            }
+
+            function applyGridDeformation(halfObj, isTopHalf) {
+                const lineGeo = halfObj.children[0].geometry, nodeGeo = halfObj.children[1].geometry, origLine = halfObj.userData.origLine, origNode = halfObj.userData.origNode;
+                const linePos = lineGeo.attributes.position.array, nodePos = nodeGeo.attributes.position.array;
+                linePos.set(origLine); nodePos.set(origNode);
+                for (let p of pinchers) {
+                    if (p.isTop !== isTopHalf) continue; 
+                    const px = p.pos.x, py = p.pos.y, pz = p.pos.z, rSq = p.radius * p.radius;
+                    for(let i=0; i<linePos.length; i+=3) {
+                        let dx = linePos[i] - px, dy = linePos[i+1] - py, dz = linePos[i+2] - pz;
+                        if (dx*dx + dy*dy + dz*dz < rSq) { let factor = Math.pow(1 - Math.sqrt(dx*dx + dy*dy + dz*dz) / p.radius, 1.5) * p.strength; linePos[i] -= dx * factor; linePos[i+1] -= dy * factor; linePos[i+2] -= dz * factor; }
+                    }
+                    for(let i=0; i<nodePos.length; i+=3) {
+                        let dx = nodePos[i] - px, dy = nodePos[i+1] - py, dz = nodePos[i+2] - pz;
+                        if (dx*dx + dy*dy + dz*dz < rSq) { let factor = Math.pow(1 - Math.sqrt(dx*dx + dy*dy + dz*dz) / p.radius, 1.5) * p.strength; nodePos[i] -= dx * factor; nodePos[i+1] -= dy * factor; nodePos[i+2] -= dz * factor; }
+                    }
+                }
+                lineGeo.attributes.position.needsUpdate = true; nodeGeo.attributes.position.needsUpdate = true;
+            }
+
+            function updateDarningSystem() {
+                pinchers.forEach(p => {
+                    if (p.pos.distanceTo(p.target) < 5) { let nx = p.pos.x + (Math.random() - 0.5) * 60, nz = p.pos.z + (Math.random() - 0.5) * 60; if (nx > 120) nx = 120; if (nx < -120) nx = -120; if (nz > 120) nz = 120; if (nz < -120) nz = -120; p.target.set(nx, p.pos.y, nz); }
+                    p.pos.lerp(p.target, 0.05); 
+                });
+                scissors.forEach(s => {
+                    s.blinkPhase += s.blinkSpeed; let bScale = Math.sin(s.blinkPhase);
+                    if (bScale < 0.1) { s.group.visible = false; } else { s.group.visible = true; s.group.scale.setScalar(bScale); }
+                    if (s.group.visible) {
+                        s.angleX += s.speedX; s.angleY += s.speedY; s.angleZ += s.speedZ;
+                        if (s.isSwarm) {
+                            const tX = s.pincher.pos.x + Math.sin(s.angleX) * s.radius; let tY = s.pincher.pos.y + Math.cos(s.angleY) * (s.radius * 0.5); const tZ = s.pincher.pos.z + Math.sin(s.angleZ) * s.radius;
+                            if(s.isTop && tY < 2) tY = 2; if(!s.isTop && tY > -2) tY = -2; s.group.position.lerp(new THREE.Vector3(tX, tY, tZ), 0.2); 
+                        } else {
+                            s.group.position.x += Math.sin(s.angleX) * 1.5; s.group.position.y += Math.cos(s.angleY) * 0.3; s.group.position.z += Math.cos(s.angleZ) * 1.5;
+                            if(s.group.position.x > 200 || s.group.position.x < -200) s.group.position.x *= 0.98; if(s.group.position.z > 200 || s.group.position.z < -200) s.group.position.z *= 0.98;
+                        }
+                        s.b1.rotation.z = Math.sin(Date.now() * 0.04 + s.angleX) * 0.6; s.b2.rotation.z = -Math.sin(Date.now() * 0.04 + s.angleX) * 0.6;
+                        s.group.rotation.x += 0.1; s.group.rotation.y += 0.1; s.group.rotation.z += 0.1; 
+                    }
+                });
+                applyGridDeformation(topHalf, true); applyGridDeformation(bottomHalf, false);
+            }
+            initDarningSystem();
+
+            const gazeSystem = { boxes: [], group: new THREE.Group() };
+            gazeSystem.group.position.z = 85; gazeSystem.group.visible = false; scene.add(gazeSystem.group);
+
+            function initGazeSystem() {
+                const len = 0.15; 
+                const pts = [ -0.5, 0.5-len, 0,  -0.5, 0.5, 0, -0.5, 0.5, 0,  -0.5+len, 0.5, 0, 0.5-len, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5-len, 0, 0.5, -0.5+len, 0,  0.5, -0.5, 0, 0.5, -0.5, 0,  0.5-len, -0.5, 0, -0.5+len, -0.5, 0, -0.5, -0.5, 0, -0.5, -0.5, 0, -0.5, -0.5+len, 0 ];
+                const bracketGeo = new THREE.BufferGeometry(); bracketGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+                const planeGeo = new THREE.PlaneGeometry(1, 1);
+                for (let i = 0; i < 15; i++) {
+                    const outlineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1.0 });
+                    const fillMat = new THREE.MeshBasicMaterial({ color: 0x88ffff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+                    const mesh = new THREE.Mesh(planeGeo, fillMat); mesh.add(new THREE.LineSegments(bracketGeo, outlineMat)); gazeSystem.group.add(mesh);
+                    let dataNodes = [];
+                    for(let j = 0; j < 3; j++) {
+                        const lineGeo = new THREE.BufferGeometry(); lineGeo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,0], 3));
+                        const lineMesh = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x88ffff, transparent: true, opacity: 0.6 })); gazeSystem.group.add(lineMesh); 
+                        const el = document.createElement('div'); el.className = 'gaze-label'; p5UiLayer.appendChild(el);
+                        dataNodes.push({ line: lineMesh, el: el, ox: 0, oy: 0, timer: Math.random() * 20 });
+                    }
+                    gazeSystem.boxes.push({ mesh: mesh, nodes: dataNodes, tx: 0, ty: 0, tw: 10, th: 10, cx: 0, cy: 0, cw: 10, ch: 10, timer: 0 });
+                }
+            }
+            initGazeSystem();
+
+            function updateGazeSystem() {
+                gazeSystem.boxes.forEach(box => {
+                    box.timer -= 1.5; 
+                    if (box.timer < 0) { box.tx = (Math.random() - 0.5) * 120; box.ty = (Math.random() - 0.5) * 140; box.tw = 5 + Math.random() * 15; box.th = 5 + Math.random() * 15; box.timer = 30 + Math.random() * 60; }
+                    box.cx += (box.tx - box.cx) * 0.25; box.cy += (box.ty - box.cy) * 0.25; box.cw += (box.tw - box.cw) * 0.25; box.ch += (box.th - box.ch) * 0.25;
+                    let gx = box.cx, gy = box.cy, sx = box.cw, sy = box.ch, isStrobe = Math.random() < 0.15, isError = Math.random() < 0.04;
+                    box.mesh.material.opacity = isStrobe ? 0.05 : 0.35; box.mesh.children[0].material.opacity = isStrobe ? 0.1 : 1.0;
+                    if (isError) { gx += (Math.random() - 0.5) * 15; sx *= 1.0 + (Math.random() - 0.5) * 0.4; box.mesh.material.color.setHex(0xff3333); box.mesh.children[0].material.color.setHex(0xff3333); 
+                    } else { box.mesh.material.color.setHex(0x88ffff); box.mesh.children[0].material.color.setHex(0xffffff); }
+                    box.mesh.position.set(gx, gy, 0); box.mesh.scale.set(sx, sy, 1);
+
+                    box.nodes.forEach(node => {
+                        node.timer -= 1.0;
+                        if (node.timer < 0) {
+                            node.ox = (Math.random() > 0.5 ? 1 : -1) * (sx / 2 + 2 + Math.random() * 12); node.oy = (Math.random() > 0.5 ? 1 : -1) * (sy / 2 + 2 + Math.random() * 12); node.timer = 5 + Math.random() * 15; 
+                            const rand = Math.random();
+                            if (rand < 0.3) node.el.innerText = (Math.random() * 9999).toFixed(2); else if (rand < 0.6) node.el.innerText = Math.floor(Math.random() * 999999); else node.el.innerText = Math.random().toString(16).substring(2, 8).toUpperCase();
+                        }
+                        if (isStrobe) { node.el.style.display = 'none'; node.line.visible = false;
+                        } else {
+                            let startX = gx + (node.ox > 0 ? sx/2 : -sx/2), startY = gy + (node.oy > 0 ? sy/2 : -sy/2);
+                            const positions = node.line.geometry.attributes.position.array; positions[0] = startX; positions[1] = startY; positions[2] = 0; positions[3] = gx + node.ox; positions[4] = gy + node.oy; positions[5] = 0;
+                            node.line.geometry.attributes.position.needsUpdate = true;
+                            node.line.material.color.setHex(isError ? 0xff3333 : 0x88ffff); node.el.style.color = isError ? '#ff3333' : '#88ffff'; node.el.style.textShadow = isError ? '0 0 5px rgba(255,51,51,0.8)' : '0 0 5px rgba(136,255,255,0.8)';
+                            const vector = new THREE.Vector3(gx + node.ox, gy + node.oy, 0); vector.applyMatrix4(gazeSystem.group.matrixWorld).project(camera);
+                            if (vector.z < 1) { node.el.style.left = `${(vector.x * .5 + .5) * window.innerWidth}px`; node.el.style.top = `${(vector.y * -.5 + .5) * window.innerHeight}px`; node.el.style.display = 'block'; node.line.visible = true;
+                            } else { node.el.style.display = 'none'; node.line.visible = false; }
+                        }
+                    });
+                });
+            }
+
+            let particleSystem; const labels = [];
+            const imageList = ['jingjutupian.jpg', 'jingjutupian2.jpg', 'jingjutupian3.jpg', 'jingjutupian4.jpg'];
+            let currentImgIdx = 0, imageState = 'WAITING', stayTimer = 0, loopCount = 0;
+
+            function loadDataImage(imageUrl) {
+                imageState = 'WAITING'; 
+                const img = new Image(); img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    if (particleSystem) scene.remove(particleSystem); 
+                    const oldLabels = document.querySelectorAll('#p5-ui-layer .track-label, #p5-ui-layer .track-line'); oldLabels.forEach(e => e.remove()); labels.length = 0;
+                    
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    const scale = 1200 / Math.max(img.width, img.height); canvas.width = img.width * scale; canvas.height = img.height * scale;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height); const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    
+                    const targetPhysicalWidth = 140; const spacing = targetPhysicalWidth / canvas.width;
+                    const positions = [], colors = [], anchorPoints = [], targetPositions = [], randomPositions = [], phases = [], mobilities = [], distRatios = []; 
+                    const centerX = canvas.width / 2, centerY = canvas.height / 2, maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
+
+                    for (let y = 0; y < canvas.height; y++) {
+                        for (let x = 0; x < canvas.width; x++) {
+                            const i = (y * canvas.width + x) * 4; const distRatio = Math.sqrt((x - centerX)**2 + (y - centerY)**2) / maxDist;
+                            if (imgData[i + 3] > 128 && Math.random() < (1.0 - distRatio * 0.7)) { 
+                                const tX = (x - canvas.width / 2) * spacing, tY = -(y - canvas.height / 2) * spacing, tZ = 80 + (Math.random() - 0.5) * 2; 
+                                const randFate = Math.random(); let scatterX = 0, scatterY = 0, scatterZ = 0, mobility = 1.0; 
+                                if (randFate > 0.85) { scatterX = (Math.random() - 0.5) * 150; scatterY = (Math.random() - 0.5) * 150; scatterZ = (Math.random() - 0.5) * 80 + 20; mobility = 10.0; } 
+                                else if (randFate > 0.40) { scatterX = (Math.random() - 0.5) * 20; scatterY = (Math.random() - 0.5) * 20; scatterZ = (Math.random() - 0.5) * 10 + 5; mobility = 3.5;  } 
+                                else { scatterX = (Math.random() - 0.5) * 2; scatterY = (Math.random() - 0.5) * 2; scatterZ = (Math.random() - 0.5) * 2; mobility = 0.5; }
+
+                                const r = 280 * Math.cbrt(Math.random()), theta = Math.random() * 2 * Math.PI, phi = Math.acos(2 * Math.random() - 1);
+                                positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi) + 80);
+                                randomPositions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi) + 80);
+                                targetPositions.push(tX + scatterX, tY + scatterY, tZ + scatterZ); mobilities.push(mobility); distRatios.push(distRatio); 
+                                colors.push(Math.min(1.0, (imgData[i] / 255) * 1.1), Math.min(1.0, (imgData[i+1] / 255) * 1.1), Math.min(1.0, (imgData[i+2] / 255) * 1.1));
+                                phases.push(Math.random() * Math.PI * 2);
+                                if (Math.random() < 0.0008 && anchorPoints.length < 4) anchorPoints.push(new THREE.Vector3(tX, tY, tZ));
+                            }
+                        }
+                    }
+                    
+                    const geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                    geometry.userData = { randomPositions: new Float32Array(randomPositions), targetPositions: new Float32Array(targetPositions), phases: new Float32Array(phases), mobilities: new Float32Array(mobilities), distRatios: new Float32Array(distRatios), progress: 0.0 };
+
+                    particleSystem = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, map: glowTexture, depthWrite: false }));
+                    scene.add(particleSystem);
+
+                    anchorPoints.forEach(pos => {
+                        const el = document.createElement('div'); el.className = 'track-label'; el.innerText = Math.floor(Math.random() * 90000 + 10000); 
+                        const line = document.createElement('div'); line.className = 'track-line';
+                        p5UiLayer.appendChild(el); p5UiLayer.appendChild(line); labels.push({ pos3D: pos, el: el, line: line });
+                    });
+                    imageState = 'FORMING';
+                }; 
+                // 若本地无文件同样会报错，但不影响结构，替换图片后正常运行
+                img.onerror = () => { imageState = 'STAY'; stayTimer = 3; }; 
+                img.src = imageUrl;
+            }
+
+            const clock = new THREE.Clock(); let timeTotal = 0;
+            function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+            function updateLabels() {
+                if (!particleSystem) return;
+                const progress = particleSystem.geometry.userData.progress;
+                labels.forEach(item => {
+                    const vector = item.pos3D.clone(); vector.applyMatrix4(particleSystem.matrixWorld); vector.project(camera);
+                    if (vector.z < 1) {
+                        const x = (vector.x * .5 + .5) * window.innerWidth, y = (vector.y * -.5 + .5) * window.innerHeight;
+                        item.el.style.display = 'block'; item.line.style.display = 'block';
+                        item.el.style.left = `${x + 35}px`; item.el.style.top = `${y - 35}px`;  item.line.style.left = `${x}px`; item.line.style.top = `${y}px`;
+                        item.line.style.height = `${Math.sqrt(35*35 + 35*35)}px`; item.line.style.transform = `rotate(-45deg)`;
+                        let textAlpha = Math.pow(progress, 4); item.el.style.opacity = textAlpha; item.line.style.opacity = textAlpha * 0.6;
+                    } else { item.el.style.display = 'none'; item.line.style.display = 'none'; }
+                });
+            }
+
+            function animateP5() {
+                animationId = requestAnimationFrame(animateP5); 
+                if (!p5Wrapper.classList.contains('active')) return;
+                
+                controls.update(); 
+                const delta = clock.getDelta(); timeTotal += delta;
+
+                let isImageFormed = particleSystem && particleSystem.geometry.userData.progress > 0.85 && imageState !== 'DISPERSING';
+                if (isImageFormed) { gazeSystem.group.visible = true; updateGazeSystem(); } 
+                else { gazeSystem.group.visible = false; gazeSystem.boxes.forEach(box => { box.nodes.forEach(node => { node.el.style.display = 'none'; node.line.visible = false; }); }); }
+
+                ambientGroup.children.forEach(pts => { pts.rotation.x += pts.userData.rx * delta; pts.rotation.y += pts.userData.ry * delta; });
+                
+                if (particleSystem) {
+                    const pd = particleSystem.geometry.userData, mat = particleSystem.material, posArr = particleSystem.geometry.attributes.position.array;
+                    
+                    if (imageState === 'FORMING') {
+                        if (pd.progress < 1.0) { pd.progress += delta * 0.12; if (pd.progress >= 1.0) { pd.progress = 1.0; imageState = 'STAY'; stayTimer = 0; } }
+                    } else if (imageState === 'STAY') {
+                        stayTimer += delta; if (stayTimer >= 3.0) imageState = 'DISPERSING';
+                    } else if (imageState === 'DISPERSING') {
+                        if (pd.progress > 0.0) {
+                            pd.progress -= delta * 0.18; 
+                            if (pd.progress <= 0.0) {
+                                pd.progress = 0.0; currentImgIdx++;
+                                if (currentImgIdx >= imageList.length) {
+                                    currentImgIdx = 0; loopCount++;
+                                    document.getElementById('next-btn').style.display = 'block'; 
+                                }
+                                loadDataImage(imageList[currentImgIdx]);
+                            }
+                        }
+                    }
+                    
+                    let subP = 0;
+                    if (imageState === 'FORMING') { subP = pd.progress * 0.4; } 
+                    else if (imageState === 'STAY') { subP = 0.4 + (stayTimer / 3.0) * 0.2; } 
+                    else if (imageState === 'DISPERSING') { subP = 0.6 + (1.0 - pd.progress) * 0.4; } 
+                    
+                    let totalProgress = (currentImgIdx * 25) + (subP * 25);
+                    if (loopCount > 0) totalProgress = 100;
+                    if (totalProgress > 99.9) totalProgress = 100;
+                    
+                    document.getElementById('progress-bar').style.width = totalProgress + '%';
+                    document.getElementById('progress-text').innerText = Math.floor(totalProgress) + '%';
+
+                    mat.opacity = (pd.progress < 0.5 ? 2 * pd.progress * pd.progress : -1 + (4 - 2 * pd.progress) * pd.progress) * 1.0; 
+
+                    const timeX = timeTotal * 18.5, timeY = timeTotal * 19.2, timeZ = timeTotal * 20.0;
+                    const p0x = pinchers[0].pos.x, p0y = pinchers[0].pos.y, p1x = pinchers[1].pos.x, p1y = pinchers[1].pos.y;
+                    const p2x = pinchers[2].pos.x, p2y = pinchers[2].pos.y, p3x = pinchers[3].pos.x, p3y = pinchers[3].pos.y;
+                    const phases = pd.phases, mobilities = pd.mobilities, distRatios = pd.distRatios, targetPositions = pd.targetPositions, randomPositions = pd.randomPositions;
+                    const invRad = 1.0 / 45.0, radSq = 2025.0, t50 = timeTotal * 50.0;
+
+                    for(let i = 0; i < posArr.length; i += 3) {
+                        const idx = i / 3, mob = mobilities[idx], ph = phases[idx], distR = distRatios[idx];
+                        let localProg = pd.progress * 1.5 - distR * 0.5;
+                        if (localProg > 1) localProg = 1; if (localProg < 0) localProg = 0;
+                        let localEaseP = localProg < 0.5 ? 2 * localProg * localProg : -1 + (4 - 2 * localProg) * localProg;
+
+                        let cX = (randomPositions[i] + Math.cos(timeTotal * 0.8 + ph) * 15) + ((targetPositions[i] + Math.sin(timeX + ph * 2.0) * 0.15 * mob) - (randomPositions[i] + Math.cos(timeTotal * 0.8 + ph) * 15)) * localEaseP;
+                        let cY = (randomPositions[i+1] + Math.sin(timeTotal * 1.2 + ph) * 15) + ((targetPositions[i+1] + Math.cos(timeY + ph * 3.0) * 0.15 * mob) - (randomPositions[i+1] + Math.sin(timeTotal * 1.2 + ph) * 15)) * localEaseP;
+                        let cZ = (randomPositions[i+2] + Math.sin(timeTotal * 1.0 + ph) * 15) + ((targetPositions[i+2] + Math.sin(timeZ + ph * 4.0) * 0.4  * mob) - (randomPositions[i+2] + Math.sin(timeTotal * 1.0 + ph) * 15)) * localEaseP;
+
+                        let aX = 0, aY = 0, aZ = 0;
+                        if (localEaseP > 0.5) {
+                            const ph100 = ph * 100.0; let dx, dy, distSq, factor;
+                            const checkPincher = (px, py) => {
+                                dx = cX - px; dy = cY - py; distSq = dx*dx + dy*dy;
+                                if (distSq < radSq) { factor = 1.0 - (Math.sqrt(distSq) * invRad); factor *= factor; aX += Math.sin(t50 + ph100) * 1.5 * factor; aY += Math.cos(t50 + ph100 * 1.2) * 1.5 * factor; aZ += Math.sin(t50 + ph100 * 0.8) * 4.0 * factor; }
+                            };
+                            checkPincher(p0x, p0y); checkPincher(p1x, p1y); checkPincher(p2x, p2y); checkPincher(p3x, p3y);
+                        }
+                        posArr[i] = cX + aX; posArr[i+1] = cY + aY; posArr[i+2] = cZ + aZ;
+                    }
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+                    particleSystem.quaternion.copy(camera.quaternion); 
+                }
+
+                const breath = Math.sin(timeTotal * 2.5);
+                topHalf.userData.nodeMat.size = bottomHalf.userData.nodeMat.size = 2.8 + breath * 1.2;     
+                topHalf.userData.nodeMat.opacity = bottomHalf.userData.nodeMat.opacity = 0.65 + breath * 0.35; 
+
+                updateDarningSystem();
+
+                const cycle = timeTotal % 13.0; bottomHalf.rotation.y = topHalf.rotation.y = 0;
+                if (cycle > 0 && cycle <= 1.0) bottomHalf.rotation.y = easeInOutQuad(cycle) * (Math.PI / 2); else if (cycle > 1.0 && cycle <= 6.5) bottomHalf.rotation.y = Math.PI / 2; 
+                if (cycle > 0.5 && cycle <= 1.5) topHalf.rotation.y = easeInOutQuad(cycle - 0.5) * (Math.PI / 2); else if (cycle > 1.5 && cycle <= 6.5) topHalf.rotation.y = Math.PI / 2; 
+                if (cycle > 6.5 && cycle <= 7.5) topHalf.rotation.y = Math.PI / 2 - easeInOutQuad(cycle - 6.5) * (Math.PI / 2); else if (cycle > 7.5) topHalf.rotation.y = 0;
+                if (cycle > 7.0 && cycle <= 8.0) bottomHalf.rotation.y = Math.PI / 2 - easeInOutQuad(cycle - 7.0) * (Math.PI / 2); else if (cycle > 8.0) bottomHalf.rotation.y = 0;
+
+                updateLabels(); renderer.render(scene, camera);
+            }
+
+            window.addEventListener('resize', () => { 
+                if (!p5Wrapper.classList.contains('active')) return;
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); 
+            });
+
+            // 供外部调用的重置函数
+            window.resetPage5 = function() {
+                cancelAnimationFrame(animationId);
+                p5CanvasContainer.style.opacity = '1';
+                p5UiLayer.style.opacity = '1';
+                document.getElementById('p5-nav').style.opacity = '1';
+                document.getElementById('next-btn').style.display = 'none';
+                currentImgIdx = 0;
+                loopCount = 0;
+                timeTotal = 0;
+                loadDataImage(imageList[currentImgIdx]);
+                animateP5();
+            };
+
+            // 首次加载初始化
+            loadDataImage(imageList[currentImgIdx]); 
+            animateP5();
+        };
+
+        // ================= 第二部分整合逻辑：进入最终生成阶段 =================
+        window.startPart2 = function() {
+            // 淡出第五页的粒子层
+            const p5Wrapper = document.getElementById('page5-wrapper');
+            p5Wrapper.style.transition = "opacity 1s ease";
+            p5Wrapper.style.opacity = '0';
+            
+            setTimeout(() => {
+                p5Wrapper.style.display = 'none';
+                p5Wrapper.classList.remove('active');
+
+                // 显示第二部分的超级外衣
+                const part2Wrapper = document.getElementById('part2-wrapper');
+                part2Wrapper.style.display = 'block';
+                
+                requestAnimationFrame(() => {
+                    part2Wrapper.style.opacity = '1';
+
+                    // 启动原本第二部分开头的逻辑（加载动画 -> 展示画廊）
+                    const sceneLoading = document.getElementById('scene-loading');
+                    const sceneGallery = document.getElementById('scene-gallery');
+
+                    sceneLoading.style.display = 'flex';
+                    requestAnimationFrame(() => {
+                        sceneLoading.style.opacity = '1';
+                    });
+
+                    setTimeout(() => {
+                        sceneLoading.style.opacity = '0';
+                        setTimeout(() => {
+                            sceneLoading.style.display = 'none';
+                            sceneGallery.style.display = 'block';
+                            requestAnimationFrame(() => {
+                                sceneGallery.style.opacity = '1';
+                                sceneGallery.classList.add('active');
+                            });
+                        }, 800); 
+                    }, 3000); 
+                });
+            }, 1000);
+        };
+
+        // 第二部分：启动数字崩溃故障转场
+        window.startGlitchTransition = function() {
+            const sceneGallery = document.getElementById('scene-gallery');
+            const videoGlitchMaster = document.getElementById('video-glitch-master');
+            const sceneGlitch = document.getElementById('scene-glitch');
+            const matrixWall = document.getElementById('matrix-wall');
+            const nextArrowBtn = document.getElementById('next-arrow-btn');
+
+            sceneGallery.classList.add('glitching');
+            videoGlitchMaster.classList.add('show');
+
+            // 3秒后关闭特效，进入高级矩阵场景
+            setTimeout(() => {
+                sceneGallery.style.display = 'none';
+                sceneGallery.classList.remove('glitching'); 
+                videoGlitchMaster.style.display = 'none';
+                videoGlitchMaster.classList.remove('show');
+
+                sceneGlitch.style.display = 'block';
+                requestAnimationFrame(() => {
+                    sceneGlitch.style.opacity = '1';
+                    
+                    // 构建并渲染高级数据墙
+                    buildMatrixWall(matrixWall);
+                    
+                    // 矩阵墙展示 5 秒后，出现右箭头
+                    setTimeout(() => {
+                        nextArrowBtn.classList.add('show');
+                    }, 5000);
+                });
+            }, 3000); 
+        };
+
+        // 第二部分：构建高级 AI 数据矩阵墙
+        window.buildMatrixWall = function(container) {
+            const categories = [
+                "京剧", "京剧行当", "京剧行头", "京剧脸谱", "京剧化妆", "京剧砌末", "京剧程式",
+                "京剧剧目", "京剧人物", "京剧名伶", "京剧艺术家", "梅兰芳",
+                "京剧演员戏装照", "京剧演员便装照", "京剧演出", "京剧舞台", "京剧戏院",
+                "京剧观众", "京剧画报", "新媒体宣传京剧", "京剧广告", "京剧文创产品",
+                "京剧插画", "京剧书画作品", "京剧电影", "京剧电视节目", "京剧虚拟数字人",
+                "VR京剧", "京剧游戏", "京剧传承"
+            ];
+            
+            const allImages = [];
+            
+            // 组装文件名
+            categories.forEach(category => {
+                for (let i = 1; i <= 16; i++) {
+                    let finalCategory = category;
+                    if (category === "京剧名") finalCategory = "京剧名伶";
+                    if (category === "京剧剧书画作品") finalCategory = "京剧书画作品";
+                    allImages.push(`${finalCategory}${i}.png`);
+                }
+            });
+
+            // 彻底打乱这480张图的排列顺序
+            for (let i = allImages.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allImages[i], allImages[j]] = [allImages[j], allImages[i]];
+            }
+
+            const fragment = document.createDocumentFragment();
+            
+            // 生成DOM结构
+            allImages.forEach((src, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'matrix-wrapper';
+                wrapper.style.animationDelay = `${Math.random() * 3.5}s`;
+
+                const img = document.createElement('img');
+                img.src = src;
+                img.className = 'matrix-img';
+                img.decoding = "async"; // 保持性能
+                
+                // 让大约 25% 的图片带上 AI 正在“分析提取”的扫描高光动效
+                if (Math.random() > 0.75) {
+                    img.classList.add('analyzing');
+                    img.style.animationDuration = `${3 + Math.random() * 5}s`;
+                    img.style.animationDelay = `-${Math.random() * 8}s`; 
+                }
+
+                wrapper.appendChild(img);
+                fragment.appendChild(wrapper);
+            });
+
+            container.appendChild(fragment);
+        };
+
+        // 第二部分：跳转到终极黑屏疑问页
+        window.goToAiQuestion = function() {
+            const sceneGlitch = document.getElementById('scene-glitch');
+            const sceneAi = document.getElementById('scene-ai-question');
+            const matrixWall = document.getElementById('matrix-wall');
+
+            sceneGlitch.style.opacity = '0';
+
+            setTimeout(() => {
+                sceneGlitch.style.display = 'none';
+                matrixWall.innerHTML = ''; // 释放极大内存保证流畅
+
+                sceneAi.style.display = 'flex';
+                
+                requestAnimationFrame(() => {
+                    sceneAi.style.opacity = '1';
+                });
+            }, 1500);
+        };
+
+        // 第二部分：灯箱逻辑
+        window.openLightbox = function(imageSrc) {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            lightboxImg.src = imageSrc;
+            lightbox.classList.add('show');
+            requestAnimationFrame(() => { lightbox.style.opacity = '1'; });
+        };
+
+        window.closeLightbox = function() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.style.opacity = '0';
+            setTimeout(() => {
+                lightbox.classList.remove('show');
+                document.getElementById('lightbox-img').src = '';
+            }, 300);
+        };
+
+    </script>
+</body>
+</html>
