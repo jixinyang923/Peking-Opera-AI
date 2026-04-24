@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 提示词注入枢纽 & 全息潜空间实验室 - 完整闭环版</title>
+    <title>京·像</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
@@ -115,9 +115,31 @@
         .fragment { position: absolute; top: 50%; left: 50%; width: 150px; height: 200px; margin-left: -75px; margin-top: -100px; background: #111; border: 1.5px solid rgba(255,255,255,0.3); background-size: cover; background-position: center; cursor: pointer; pointer-events: auto !important; z-index: 100; filter: brightness(0.9) contrast(1.1); transition: filter 0.3s, border 0.3s, box-shadow 0.3s; will-change: transform, opacity; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; }
         .fragment:hover { filter: brightness(1.2) contrast(1); border: 2px solid var(--accent); box-shadow: 0 0 40px var(--accent); z-index: 9999 !important; }
         
-        .ui { position: fixed; top: 80px; left: 40px; z-index: 100; color: #444; font-size: 11px; pointer-events: none; text-transform: uppercase; line-height: 1.6;}
+        /* 右侧滚动提示视觉动画 */
+        .scroll-ui {
+            position: fixed; top: 50%; right: 40px; transform: translateY(-50%);
+            z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 15px;
+            pointer-events: none; opacity: 1; transition: opacity 0.5s ease;
+        }
+        .scroll-ui span {
+            writing-mode: vertical-rl; letter-spacing: 4px; font-size: 13px; color: var(--accent); font-weight: bold;
+        }
+        .scroll-arrow {
+            width: 22px; height: 38px; border: 2px solid var(--accent); border-radius: 11px;
+            position: relative; display: flex; justify-content: center;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+        }
+        .scroll-arrow::before {
+            content: ''; width: 4px; height: 8px; background: var(--accent); border-radius: 2px;
+            position: absolute; top: 6px; animation: scroll-wheel 1.5s infinite;
+            box-shadow: 0 0 5px var(--accent);
+        }
+        @keyframes scroll-wheel {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(14px); opacity: 0; }
+        }
         .blink-text { animation: blink 1.5s step-start infinite; color: var(--accent); font-weight: bold; }
-        @keyframes blink { 50% { opacity: 0; } }
+        @keyframes blink { 50% { opacity: 0.5; } }
 
         #hover-tooltip { position: fixed; background: rgba(0, 15, 10, 0.95); color: #fff; font-size: 11px; padding: 6px 12px; border: 1px solid var(--accent); box-shadow: 0 0 15px rgba(0, 229, 255, 0.4); pointer-events: none; z-index: 10000; display: none; letter-spacing: 2px; font-weight: bold; text-transform: uppercase; font-family: 'HYPixel', sans-serif; }
         #hover-tooltip::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
@@ -458,6 +480,7 @@
     </style>
 </head>
 <body>
+    <audio id="bgm" src="bgm.MP3" preload="auto"></audio>
 
     <div id="underlying-page"></div>
 
@@ -493,7 +516,11 @@
             </button>
         </div>
 
-        <div class="ui"><span id="ui-instruction" class="blink-text">&gt; 鼠标滚动浏览_</span></div>
+        <div class="scroll-ui" id="scroll-hint-ui">
+            <div class="scroll-arrow" id="ui-arrow"></div>
+            <span id="ui-instruction" class="blink-text">鼠标向下滚动</span>
+        </div>
+
         <div id="hover-tooltip">点击查看大图</div>
         <div id="viewport">
             <canvas id="singularity-canvas"></canvas>
@@ -627,6 +654,82 @@
     </div>
 
     <script>
+        // ================= 全局系统增强：单例背景音乐与无操作超时检测 =================
+        let idleTimer;
+        const IDLE_TIMEOUT = 3 * 60 * 1000; // 3分钟无操作（180000毫秒）
+
+        function resetIdleTimer() {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                // 如果当前不在首页（比如在实验室、画廊等界面），则自动执行返回首页
+                if (typeof window.goHome === 'function') {
+                    window.goHome();
+                }
+            }, IDLE_TIMEOUT);
+        }
+
+        // 监听各类用户操作以重置3分钟倒计时
+        ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(event => {
+            document.addEventListener(event, resetIdleTimer, { passive: true });
+        });
+
+        // 启动初始计时
+        resetIdleTimer();
+
+        // 强力且唯一的背景音乐解锁逻辑
+        const bgm = document.getElementById('bgm');
+        let bgmUnlocked = false; // 绝对防重叠锁
+
+        // 【核心修改】时间轴强行截断器：消除重载带来的物理延迟间隙
+        bgm.addEventListener('timeupdate', function() {
+            // 当播放到距离结束还有 0.2 秒时，瞬间拉回 0 秒
+            // 注：如果 MP3 文件本身末尾有明显静音，可将 0.2 调大（如 0.5、0.8）
+            if (this.duration && this.currentTime >= this.duration - 0.2) {
+                this.currentTime = 0;
+                this.play();
+            }
+        });
+
+        function tryPlayAudio() {
+            if (bgmUnlocked) return; // 锁死，确保只执行一次播放
+            
+            const playPromise = bgm.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    // 播放成功！上锁并移除所有监听器
+                    bgmUnlocked = true;
+                    ['click', 'touchstart', 'keydown', 'mousedown'].forEach(evt => {
+                        document.removeEventListener(evt, tryPlayAudio, true);
+                    });
+                    console.log("BGM 启动成功！");
+                }).catch(error => {
+                    // 依然被拦截，保持静默，等待下一次点击真实交互
+                });
+            }
+        }
+
+        // 尝试页面加载时立即播放 (极少情况会成功)
+        tryPlayAudio();
+
+        // 绑定真实的用户交互事件（捕获阶段，确保最先触发）
+        ['click', 'touchstart', 'keydown', 'mousedown'].forEach(evt => {
+            document.addEventListener(evt, tryPlayAudio, true);
+        });
+
+
+        // 辅助函数：统一控制右侧滑动提示文字与动画的显示/隐藏
+        function setScrollHint(visible) {
+            const uiLayer = document.getElementById('scroll-hint-ui');
+            if (uiLayer) {
+                uiLayer.style.opacity = visible ? '1' : '0';
+                // 等待淡出动画结束后隐藏占位
+                setTimeout(() => {
+                    if(!visible) uiLayer.style.display = 'none';
+                    else uiLayer.style.display = 'flex';
+                }, 500);
+            }
+        }
+
         // ================= 全局状态管理 & 导航路由 =================
         function resetLabState() {
             window.isUnlocked = false; window.isTyping = false;
@@ -941,6 +1044,9 @@
                     setTimeout(() => {
                         document.getElementById('page2-wrapper').classList.add('active');
                         if (!window.p2Init) { window.initPage2(); window.p2Init = true; }
+                        
+                        // 进入第二页时确保显示滚动提示
+                        setScrollHint(true);
                     }, 800); 
                 } else {
                     box.classList.remove('error-shake'); void box.offsetWidth; 
@@ -958,7 +1064,7 @@
             const world = document.getElementById('world'); const svg = document.getElementById('line-svg');
             const canvas = document.getElementById('singularity-canvas'); const ctx = canvas.getContext('2d');
             const bbLayer = document.getElementById('blackbox-layer'); const bbCanvas = document.getElementById('blackbox-canvas');
-            const bbCtx = bbCanvas.getContext('2d'); const uiInstruction = document.getElementById('ui-instruction');
+            const bbCtx = bbCanvas.getContext('2d'); 
             const hoverTooltip = document.getElementById('hover-tooltip'); const p2Wrapper = document.getElementById('page2-wrapper');
 
             let bbActive = false; const hexChars = "0123456789ABCDEF"; const count = 350; 
@@ -976,7 +1082,10 @@
                 if (isExploding || !p2Wrapper.classList.contains('active')) return; 
                 const rect = bbCanvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
                 if (Math.sqrt(Math.pow(x - bbCanvas.width/2, 2) + Math.pow(y - bbCanvas.height/2, 2)) < 120) {
-                    isExploding = true; explosionStartTime = Date.now(); uiInstruction.innerText = ""; 
+                    isExploding = true; explosionStartTime = Date.now(); 
+                    // 隐藏滚动提示
+                    setScrollHint(false);
+
                     for(let i = 0; i < 800; i++) {
                         explosionParticles.push({ x: (Math.random() - 0.5) * 2500, y: (Math.random() - 0.5) * 2500, z: Math.random() * 2000 + 100, speedZ: Math.random() * 20 + 15, char: hexChars[Math.floor(Math.random() * 16)] });
                     }
@@ -1140,10 +1249,10 @@
                     }
 
                     if (scroll > 0.94) {
-                        if (!bbActive) { bbActive = true; bbLayer.style.display = 'block'; setTimeout(() => bbLayer.style.opacity = 1, 50); uiInstruction.innerText = ""; }
+                        if (!bbActive) { bbActive = true; bbLayer.style.display = 'block'; setTimeout(() => bbLayer.style.opacity = 1, 50); setScrollHint(false); }
                         drawBlackboxFrame(time);
                     } else {
-                        if (bbActive) { bbActive = false; isExploding = false; bbLayer.style.opacity = 0; uiInstruction.innerText = "> 鼠标滚动浏览_"; setTimeout(() => bbLayer.style.display = 'none', 1000); }
+                        if (bbActive) { bbActive = false; isExploding = false; bbLayer.style.opacity = 0; setScrollHint(true); setTimeout(() => bbLayer.style.display = 'none', 1000); }
                     }
                 }
                 requestAnimationFrame(animateP2);
