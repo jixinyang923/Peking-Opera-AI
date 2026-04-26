@@ -107,6 +107,7 @@
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 5;
             background: var(--bg); font-family: "Courier New", monospace; color: white;
             overflow-x: hidden; overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity 1s ease;
+            scroll-behavior: smooth; /* 添加平滑滚动支持 */
         }
         #page2-wrapper.active { opacity: 1; pointer-events: auto; }
 
@@ -163,8 +164,22 @@
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 200;
             background: #000; overflow: hidden; display: none; opacity: 0; transition: opacity 1s ease;
         }
-        #lab-wrapper canvas { display: block; width: 100vw; height: 100vh; position: absolute; top:0; left:0; z-index: 10;}
-        #lab-wrapper video { display: none; }
+        
+        /* 修复：将背景视频设置为绝对全屏覆盖 */
+        #lab-wrapper video { 
+            display: block; 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        
+        #lab-wrapper canvas { display: block; width: 100vw; height: 100vh; position: absolute; top:0; left:0; z-index: 10; pointer-events: none;}
 
         .content-placeholder { 
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
@@ -606,9 +621,8 @@
     </div>
 
     <div id="part2-wrapper">
-        
         <div class="nav-buttons-container active" id="part2-nav" style="opacity: 1; pointer-events: auto; z-index: 100001; position: absolute; top: 40px; left: 40px;">
-            <button class="nav-btn" onclick="returnToPage5FromPart2()">
+            <button class="nav-btn" onclick="handlePart2Return()">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 返回
             </button>
@@ -656,34 +670,27 @@
     <script>
         // ================= 全局系统增强：单例背景音乐与无操作超时检测 =================
         let idleTimer;
-        const IDLE_TIMEOUT = 3 * 60 * 1000; // 3分钟无操作（180000毫秒）
+        const IDLE_TIMEOUT = 3 * 60 * 1000;
 
         function resetIdleTimer() {
             clearTimeout(idleTimer);
             idleTimer = setTimeout(() => {
-                // 如果当前不在首页（比如在实验室、画廊等界面），则自动执行返回首页
                 if (typeof window.goHome === 'function') {
                     window.goHome();
                 }
             }, IDLE_TIMEOUT);
         }
 
-        // 监听各类用户操作以重置3分钟倒计时
         ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(event => {
             document.addEventListener(event, resetIdleTimer, { passive: true });
         });
 
-        // 启动初始计时
         resetIdleTimer();
 
-        // 强力且唯一的背景音乐解锁逻辑
         const bgm = document.getElementById('bgm');
-        let bgmUnlocked = false; // 绝对防重叠锁
+        let bgmUnlocked = false; 
 
-        // 【核心修改】时间轴强行截断器：消除重载带来的物理延迟间隙
         bgm.addEventListener('timeupdate', function() {
-            // 当播放到距离结束还有 0.2 秒时，瞬间拉回 0 秒
-            // 注：如果 MP3 文件本身末尾有明显静音，可将 0.2 调大（如 0.5、0.8）
             if (this.duration && this.currentTime >= this.duration - 0.2) {
                 this.currentTime = 0;
                 this.play();
@@ -691,38 +698,30 @@
         });
 
         function tryPlayAudio() {
-            if (bgmUnlocked) return; // 锁死，确保只执行一次播放
+            if (bgmUnlocked) return; 
             
             const playPromise = bgm.play();
             if (playPromise !== undefined) {
                 playPromise.then(() => {
-                    // 播放成功！上锁并移除所有监听器
                     bgmUnlocked = true;
                     ['click', 'touchstart', 'keydown', 'mousedown'].forEach(evt => {
                         document.removeEventListener(evt, tryPlayAudio, true);
                     });
                     console.log("BGM 启动成功！");
-                }).catch(error => {
-                    // 依然被拦截，保持静默，等待下一次点击真实交互
-                });
+                }).catch(error => {});
             }
         }
 
-        // 尝试页面加载时立即播放 (极少情况会成功)
         tryPlayAudio();
 
-        // 绑定真实的用户交互事件（捕获阶段，确保最先触发）
         ['click', 'touchstart', 'keydown', 'mousedown'].forEach(evt => {
             document.addEventListener(evt, tryPlayAudio, true);
         });
 
-
-        // 辅助函数：统一控制右侧滑动提示文字与动画的显示/隐藏
         function setScrollHint(visible) {
             const uiLayer = document.getElementById('scroll-hint-ui');
             if (uiLayer) {
                 uiLayer.style.opacity = visible ? '1' : '0';
-                // 等待淡出动画结束后隐藏占位
                 setTimeout(() => {
                     if(!visible) uiLayer.style.display = 'none';
                     else uiLayer.style.display = 'flex';
@@ -731,6 +730,9 @@
         }
 
         // ================= 全局状态管理 & 导航路由 =================
+        window.currentPart2State = 'NONE';
+        window.isPart2Transitioning = false; 
+
         function resetLabState() {
             window.isUnlocked = false; window.isTyping = false;
             if(window.cnInterval) clearInterval(window.cnInterval);
@@ -741,12 +743,24 @@
             document.getElementById('cnText').innerHTML = "准备生成";
             document.getElementById('enText').innerHTML = "";
             const v1 = document.getElementById('v1');
-            if (v1) { v1.currentTime = 0; v1.play(); }
+            if (v1) { v1.pause(); v1.currentTime = 0; } 
         }
 
+        // 【修复穿模 Bug】：点击第二页的返回键时，彻底干掉内联透明度和显示状态
         window.reverseReveal = function() { 
-            document.getElementById('page2-wrapper').classList.remove('active');
+            const p2 = document.getElementById('page2-wrapper');
+            if (p2.scrollTop > 50) {
+                p2.scrollTo({ top: 0, behavior: 'smooth' });
+                return; 
+            }
+            p2.classList.remove('active');
+            
+            // 强制覆盖内联 opacity 为 0
+            p2.style.opacity = '0';
+
             setTimeout(() => {
+                // 动画走完后隐藏 DOM
+                p2.style.display = 'none'; 
                 document.getElementById('underlying-page').style.transform = "scale(0.9)";
                 document.getElementById('ui-layer').classList.remove('zoom-reveal');
                 document.getElementById('userInput').value = "";
@@ -762,6 +776,7 @@
                 document.getElementById('underlying-page').style.display = 'flex';
                 const p2 = document.getElementById('page2-wrapper');
                 p2.style.display = 'block';
+                p2.scrollTop = 0; 
                 setTimeout(() => { p2.style.opacity = '1'; p2.classList.add('active'); }, 50);
             }, 1000);
         };
@@ -776,6 +791,9 @@
                 labWrapper.style.display = 'block'; void labWrapper.offsetWidth;
                 labWrapper.style.opacity = '1'; labWrapper.classList.add('active');
                 resetLabState(); 
+                
+                const v1 = document.getElementById('v1');
+                if (v1) { v1.currentTime = 0; v1.play(); }
             }, 1000);
         };
 
@@ -789,39 +807,101 @@
                 const p4Wrapper = document.getElementById('page4-wrapper');
                 p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth;
                 p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active');
+                
+                // 【修复：从 Page5 返回 Page4 时，确保 Page4 导航按钮恢复】
+                const p4Nav = document.getElementById('p4-nav');
+                if (p4Nav) {
+                    p4Nav.style.transitionDelay = '0.8s';
+                    p4Nav.style.opacity = '1';
+                    p4Nav.style.transform = 'translateX(0)';
+                    p4Nav.style.pointerEvents = 'auto';
+                }
+                
                 if (window.resetPage4) window.resetPage4();
             }, 1000);
         };
 
-        // 从终局结果页面返回到粒子重构页面
-        window.returnToPage5FromPart2 = function() {
-            const part2Wrapper = document.getElementById('part2-wrapper');
-            part2Wrapper.style.opacity = '0';
-            setTimeout(() => {
-                part2Wrapper.style.display = 'none';
-                
-                // 完全重置第二部分的状态，以便下次还能正常进入
-                document.getElementById('scene-loading').style.display = 'none';
-                document.getElementById('scene-loading').style.opacity = '0';
-                document.getElementById('scene-gallery').style.display = 'none';
-                document.getElementById('scene-gallery').style.opacity = '0';
-                document.getElementById('scene-gallery').classList.remove('active', 'glitching');
-                document.getElementById('video-glitch-master').style.display = 'none';
-                document.getElementById('video-glitch-master').classList.remove('show');
-                document.getElementById('scene-glitch').style.display = 'none';
-                document.getElementById('scene-glitch').style.opacity = '0';
-                document.getElementById('matrix-wall').innerHTML = '';
-                document.getElementById('next-arrow-btn').classList.remove('show');
-                document.getElementById('scene-ai-question').style.display = 'none';
-                document.getElementById('scene-ai-question').style.opacity = '0';
+        window.resetPart2DOM = function() {
+            document.getElementById('scene-loading').style.display = 'none';
+            document.getElementById('scene-loading').style.opacity = '0';
+            document.getElementById('scene-gallery').style.display = 'none';
+            document.getElementById('scene-gallery').style.opacity = '0';
+            document.getElementById('scene-gallery').classList.remove('active', 'glitching');
+            document.getElementById('video-glitch-master').style.display = 'none';
+            document.getElementById('video-glitch-master').classList.remove('show');
+            document.getElementById('scene-glitch').style.display = 'none';
+            document.getElementById('scene-glitch').style.opacity = '0';
+            document.getElementById('matrix-wall').innerHTML = '';
+            document.getElementById('next-arrow-btn').classList.remove('show');
+            document.getElementById('scene-ai-question').style.display = 'none';
+            document.getElementById('scene-ai-question').style.opacity = '0';
+            window.currentPart2State = 'NONE';
+        };
 
-                // 重新显示第 5 页
-                const p5Wrapper = document.getElementById('page5-wrapper');
-                p5Wrapper.style.display = 'block';
-                void p5Wrapper.offsetWidth;
-                p5Wrapper.style.opacity = '1';
-                p5Wrapper.classList.add('active');
-            }, 1000);
+        window.handlePart2Return = function() {
+            if (window.isPart2Transitioning) return; 
+            
+            if (window.currentPart2State === 'QUESTION') {
+                window.isPart2Transitioning = true;
+                const sceneAi = document.getElementById('scene-ai-question');
+                const sceneGlitch = document.getElementById('scene-glitch');
+                const matrixWall = document.getElementById('matrix-wall');
+                
+                sceneAi.style.opacity = '0';
+                setTimeout(() => {
+                    sceneAi.style.display = 'none';
+                    sceneGlitch.style.display = 'block';
+                    
+                    window.buildMatrixWall(matrixWall);
+                    document.getElementById('next-arrow-btn').classList.add('show'); 
+                    
+                    requestAnimationFrame(() => {
+                        sceneGlitch.style.opacity = '1';
+                        window.currentPart2State = 'MATRIX';
+                        window.isPart2Transitioning = false;
+                    });
+                }, 1000);
+
+            } else if (window.currentPart2State === 'MATRIX') {
+                window.isPart2Transitioning = true;
+                const sceneGlitch = document.getElementById('scene-glitch');
+                const sceneGallery = document.getElementById('scene-gallery');
+                const matrixWall = document.getElementById('matrix-wall');
+                const nextArrowBtn = document.getElementById('next-arrow-btn');
+                
+                sceneGlitch.style.opacity = '0';
+                nextArrowBtn.classList.remove('show');
+                
+                setTimeout(() => {
+                    sceneGlitch.style.display = 'none';
+                    matrixWall.innerHTML = ''; 
+                    
+                    sceneGallery.style.display = 'block';
+                    requestAnimationFrame(() => {
+                        sceneGallery.style.opacity = '1';
+                        sceneGallery.classList.add('active'); 
+                        window.currentPart2State = 'GALLERY';
+                        window.isPart2Transitioning = false;
+                    });
+                }, 1000);
+
+            } else {
+                window.isPart2Transitioning = true;
+                const part2Wrapper = document.getElementById('part2-wrapper');
+                part2Wrapper.style.opacity = '0';
+                
+                setTimeout(() => {
+                    part2Wrapper.style.display = 'none';
+                    window.resetPart2DOM();
+                    
+                    const p5Wrapper = document.getElementById('page5-wrapper');
+                    p5Wrapper.style.display = 'block';
+                    void p5Wrapper.offsetWidth;
+                    p5Wrapper.style.opacity = '1';
+                    p5Wrapper.classList.add('active');
+                    window.isPart2Transitioning = false;
+                }, 1000);
+            }
         };
 
         window.goHome = function() { 
@@ -831,6 +911,7 @@
             });
             
             if(window.isTransitioning) window.isTransitioning = false;
+            if(window.isPart2Transitioning) window.isPart2Transitioning = false;
 
             setTimeout(() => {
                 ['lab-wrapper', 'page4-wrapper', 'page2-wrapper', 'page5-wrapper', 'part2-wrapper'].forEach(id => {
@@ -842,20 +923,17 @@
                 if (window.resetPage4) window.resetPage4();
                 if (window.resetPage5) window.resetPage5(); 
 
-                // 清理第二部分状态
-                document.getElementById('scene-loading').style.display = 'none';
-                document.getElementById('scene-loading').style.opacity = '0';
-                document.getElementById('scene-gallery').style.display = 'none';
-                document.getElementById('scene-gallery').style.opacity = '0';
-                document.getElementById('scene-gallery').classList.remove('active', 'glitching');
-                document.getElementById('video-glitch-master').style.display = 'none';
-                document.getElementById('video-glitch-master').classList.remove('show');
-                document.getElementById('scene-glitch').style.display = 'none';
-                document.getElementById('scene-glitch').style.opacity = '0';
-                document.getElementById('matrix-wall').innerHTML = '';
-                document.getElementById('next-arrow-btn').classList.remove('show');
-                document.getElementById('scene-ai-question').style.display = 'none';
-                document.getElementById('scene-ai-question').style.opacity = '0';
+                const p2 = document.getElementById('page2-wrapper');
+                if (p2) {
+                    p2.scrollTop = 0;
+                    p2.classList.remove('active');
+                    p2.style.display = 'none';
+                    p2.style.opacity = '0'; // 确保彻底透明
+                }
+
+                if (window.closeDetail) window.closeDetail(); 
+
+                window.resetPart2DOM();
 
                 const p1Under = document.getElementById('underlying-page');
                 p1Under.style.display = 'flex'; p1Under.style.transform = "scale(0.9)";
@@ -866,14 +944,26 @@
             }, 1000);
         };
 
+        // 【修复：Page4 第一次打开没有导航按钮的问题】
         window.goToMatrixPage = function() { 
             const labWrapper = document.getElementById('lab-wrapper');
             labWrapper.style.opacity = '0';
             setTimeout(() => {
                 labWrapper.classList.remove('active'); labWrapper.style.display = 'none'; resetLabState();
+                
                 const p4Wrapper = document.getElementById('page4-wrapper');
                 p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth; 
                 p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active'); 
+                
+                // 强制覆写导航容器样式，避免第一次无过渡
+                const p4Nav = document.getElementById('p4-nav');
+                if (p4Nav) {
+                    p4Nav.style.transitionDelay = '0.8s'; // 初次进入留出延迟感
+                    p4Nav.style.opacity = '1';
+                    p4Nav.style.transform = 'translateX(0)';
+                    p4Nav.style.pointerEvents = 'auto';
+                }
+
                 if (!window.p4Init) { window.initPage4(); window.p4Init = true; } 
                 else { window.resetPage4(); }
             }, 1000);
@@ -897,7 +987,6 @@
                 else { window.resetPage5(); }
             }, 1000);
         };
-
 
         // ================= PAGE 1: 枢纽逻辑 =================
         (function() {
@@ -1041,11 +1130,18 @@
                 if(userInput.value.toLowerCase().includes("peking opera")) {
                     document.getElementById('ui-layer').classList.add('zoom-reveal');
                     document.getElementById('underlying-page').style.transform = "scale(1)";
+                    
                     setTimeout(() => {
-                        document.getElementById('page2-wrapper').classList.add('active');
+                        const p2Wrapper = document.getElementById('page2-wrapper');
+                        
+                        p2Wrapper.style.display = 'block'; 
+                        p2Wrapper.scrollTop = 0; 
+                        void p2Wrapper.offsetWidth;
+                        p2Wrapper.style.opacity = '1';
+                        p2Wrapper.classList.add('active');
+                        
                         if (!window.p2Init) { window.initPage2(); window.p2Init = true; }
                         
-                        // 进入第二页时确保显示滚动提示
                         setScrollHint(true);
                     }, 800); 
                 } else {
@@ -1056,7 +1152,6 @@
             }
             document.getElementById('userInput').addEventListener('keydown', e => { if (e.key === 'Enter') triggerReveal(); });
         })();
-
 
         // ================= PAGE 2: 潜空间画廊逻辑 =================
         window.p2Init = false;
@@ -1083,7 +1178,6 @@
                 const rect = bbCanvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
                 if (Math.sqrt(Math.pow(x - bbCanvas.width/2, 2) + Math.pow(y - bbCanvas.height/2, 2)) < 120) {
                     isExploding = true; explosionStartTime = Date.now(); 
-                    // 隐藏滚动提示
                     setScrollHint(false);
 
                     for(let i = 0; i < 800; i++) {
@@ -1094,7 +1188,13 @@
                         setTimeout(() => {
                             p2Wrapper.style.display = 'none'; document.getElementById('underlying-page').style.display = 'none'; document.getElementById('ui-layer').style.display = 'none';
                             const labWrapper = document.getElementById('lab-wrapper'); labWrapper.style.display = 'block'; void labWrapper.offsetWidth; labWrapper.style.opacity = '1'; labWrapper.classList.add('active'); 
+                            
                             if (!window.labInit) { window.initLab(); window.labInit = true; }
+                            else { 
+                                resetLabState();
+                                const v1 = document.getElementById('v1');
+                                if (v1) { v1.currentTime = 0; v1.play(); } 
+                            }
                         }, 1000); 
                     }, 2200);
                 }
@@ -1651,7 +1751,15 @@
                 networkCtx.fillStyle = 'rgba(255, 255, 255, 0.9)'; networkCtx.fillRect(0, 0, width, height);
                 nodes.forEach(node => { if (node.alpha > 0) { for (let i = 0; i < 400; i++) { particles.push(new NoiseParticle(node.x + (Math.random() - 0.5) * (node.currentDrawW || 100), node.y + (Math.random() - 0.5) * (node.currentDrawH || 100), true)); } } });
                 for(let i = 0; i < 8000; i++) { particles.push(new NoiseParticle(Math.random() * width, Math.random() * height, false)); }
-                nodes = []; document.getElementById('p4-nav').style.opacity = '0'; 
+                nodes = []; 
+                
+                // 【修复：隐去导航按钮时清除延迟，保证干净消失】
+                const p4Nav = document.getElementById('p4-nav');
+                if (p4Nav) {
+                    p4Nav.style.transitionDelay = '0s';
+                    p4Nav.style.opacity = '0';
+                    p4Nav.style.pointerEvents = 'none';
+                }
             }
 
             function animate() {
@@ -1689,7 +1797,15 @@
             }
 
             window.resetPage4 = function() { 
-                p4Wrapper.style.transition = 'opacity 1s ease'; document.getElementById('p4-nav').style.opacity = '1';
+                p4Wrapper.style.transition = 'opacity 1s ease'; 
+                // 【修复：重置页面时将导航按钮状态强行恢复】
+                const p4Nav = document.getElementById('p4-nav');
+                if (p4Nav) {
+                    p4Nav.style.transitionDelay = '0s';
+                    p4Nav.style.opacity = '1';
+                    p4Nav.style.transform = 'translateX(0)';
+                    p4Nav.style.pointerEvents = 'auto';
+                }
                 nodes = []; particles = []; systemState = 'NORMAL'; networkCtx.clearRect(0, 0, width, height); initNodes(); 
             };
             requestAnimationFrame(animate);
@@ -1955,7 +2071,6 @@
                     });
                     imageState = 'FORMING';
                 }; 
-                // 若本地无文件同样会报错，但不影响结构，替换图片后正常运行
                 img.onerror = () => { imageState = 'STAY'; stayTimer = 3; }; 
                 img.src = imageUrl;
             }
@@ -2077,7 +2192,6 @@
                 camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); 
             });
 
-            // 供外部调用的重置函数
             window.resetPage5 = function() {
                 cancelAnimationFrame(animationId);
                 p5CanvasContainer.style.opacity = '1';
@@ -2091,14 +2205,13 @@
                 animateP5();
             };
 
-            // 首次加载初始化
             loadDataImage(imageList[currentImgIdx]); 
             animateP5();
         };
 
-        // ================= 第二部分整合逻辑：进入最终生成阶段 =================
         window.startPart2 = function() {
-            // 淡出第五页的粒子层
+            window.currentPart2State = 'LOADING';
+            
             const p5Wrapper = document.getElementById('page5-wrapper');
             p5Wrapper.style.transition = "opacity 1s ease";
             p5Wrapper.style.opacity = '0';
@@ -2107,14 +2220,12 @@
                 p5Wrapper.style.display = 'none';
                 p5Wrapper.classList.remove('active');
 
-                // 显示第二部分的超级外衣
                 const part2Wrapper = document.getElementById('part2-wrapper');
                 part2Wrapper.style.display = 'block';
                 
                 requestAnimationFrame(() => {
                     part2Wrapper.style.opacity = '1';
 
-                    // 启动原本第二部分开头的逻辑（加载动画 -> 展示画廊）
                     const sceneLoading = document.getElementById('scene-loading');
                     const sceneGallery = document.getElementById('scene-gallery');
 
@@ -2131,6 +2242,7 @@
                             requestAnimationFrame(() => {
                                 sceneGallery.style.opacity = '1';
                                 sceneGallery.classList.add('active');
+                                window.currentPart2State = 'GALLERY';
                             });
                         }, 800); 
                     }, 3000); 
@@ -2138,8 +2250,8 @@
             }, 1000);
         };
 
-        // 第二部分：启动数字崩溃故障转场
         window.startGlitchTransition = function() {
+            window.isPart2Transitioning = true;
             const sceneGallery = document.getElementById('scene-gallery');
             const videoGlitchMaster = document.getElementById('video-glitch-master');
             const sceneGlitch = document.getElementById('scene-glitch');
@@ -2149,7 +2261,6 @@
             sceneGallery.classList.add('glitching');
             videoGlitchMaster.classList.add('show');
 
-            // 3秒后关闭特效，进入高级矩阵场景
             setTimeout(() => {
                 sceneGallery.style.display = 'none';
                 sceneGallery.classList.remove('glitching'); 
@@ -2160,10 +2271,10 @@
                 requestAnimationFrame(() => {
                     sceneGlitch.style.opacity = '1';
                     
-                    // 构建并渲染高级数据墙
                     buildMatrixWall(matrixWall);
+                    window.currentPart2State = 'MATRIX';
+                    window.isPart2Transitioning = false;
                     
-                    // 矩阵墙展示 5 秒后，出现右箭头
                     setTimeout(() => {
                         nextArrowBtn.classList.add('show');
                     }, 5000);
@@ -2171,7 +2282,6 @@
             }, 3000); 
         };
 
-        // 第二部分：构建高级 AI 数据矩阵墙
         window.buildMatrixWall = function(container) {
             const categories = [
                 "京剧", "京剧行当", "京剧行头", "京剧脸谱", "京剧化妆", "京剧砌末", "京剧程式",
@@ -2184,7 +2294,6 @@
             
             const allImages = [];
             
-            // 组装文件名
             categories.forEach(category => {
                 for (let i = 1; i <= 16; i++) {
                     let finalCategory = category;
@@ -2194,7 +2303,6 @@
                 }
             });
 
-            // 彻底打乱这480张图的排列顺序
             for (let i = allImages.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [allImages[i], allImages[j]] = [allImages[j], allImages[i]];
@@ -2202,7 +2310,6 @@
 
             const fragment = document.createDocumentFragment();
             
-            // 生成DOM结构
             allImages.forEach((src, index) => {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'matrix-wrapper';
@@ -2211,9 +2318,8 @@
                 const img = document.createElement('img');
                 img.src = src;
                 img.className = 'matrix-img';
-                img.decoding = "async"; // 保持性能
+                img.decoding = "async"; 
                 
-                // 让大约 25% 的图片带上 AI 正在“分析提取”的扫描高光动效
                 if (Math.random() > 0.75) {
                     img.classList.add('analyzing');
                     img.style.animationDuration = `${3 + Math.random() * 5}s`;
@@ -2227,8 +2333,8 @@
             container.appendChild(fragment);
         };
 
-        // 第二部分：跳转到终极黑屏疑问页
         window.goToAiQuestion = function() {
+            window.isPart2Transitioning = true;
             const sceneGlitch = document.getElementById('scene-glitch');
             const sceneAi = document.getElementById('scene-ai-question');
             const matrixWall = document.getElementById('matrix-wall');
@@ -2237,17 +2343,18 @@
 
             setTimeout(() => {
                 sceneGlitch.style.display = 'none';
-                matrixWall.innerHTML = ''; // 释放极大内存保证流畅
+                matrixWall.innerHTML = ''; 
 
                 sceneAi.style.display = 'flex';
                 
                 requestAnimationFrame(() => {
                     sceneAi.style.opacity = '1';
+                    window.currentPart2State = 'QUESTION'; 
+                    window.isPart2Transitioning = false;
                 });
             }, 1500);
         };
 
-        // 第二部分：灯箱逻辑
         window.openLightbox = function(imageSrc) {
             const lightbox = document.getElementById('lightbox');
             const lightboxImg = document.getElementById('lightbox-img');
