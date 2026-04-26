@@ -91,6 +91,15 @@
         #part2-wrapper.active .nav-buttons-container {
             opacity: 1; transform: translateX(0); transition-delay: 0.8s; pointer-events: auto;
         }
+        
+        /* 【核心修复】用于爆炸时无缝强制隐藏返回按钮的 CSS 类 */
+        .nav-buttons-container.nav-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition-delay: 0s !important;
+            transform: translateX(-20px) !important;
+        }
+
         .nav-btn { 
             background: transparent; border: none; outline: none;
             color: var(--accent); font-family: 'AlimamaShuHeiTi', 'JetBrains Mono', monospace; font-size: 16px; 
@@ -107,7 +116,7 @@
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 5;
             background: var(--bg); font-family: "Courier New", monospace; color: white;
             overflow-x: hidden; overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity 1s ease;
-            scroll-behavior: smooth; /* 添加平滑滚动支持 */
+            scroll-behavior: smooth; 
         }
         #page2-wrapper.active { opacity: 1; pointer-events: auto; }
 
@@ -116,7 +125,6 @@
         .fragment { position: absolute; top: 50%; left: 50%; width: 150px; height: 200px; margin-left: -75px; margin-top: -100px; background: #111; border: 1.5px solid rgba(255,255,255,0.3); background-size: cover; background-position: center; cursor: pointer; pointer-events: auto !important; z-index: 100; filter: brightness(0.9) contrast(1.1); transition: filter 0.3s, border 0.3s, box-shadow 0.3s; will-change: transform, opacity; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; }
         .fragment:hover { filter: brightness(1.2) contrast(1); border: 2px solid var(--accent); box-shadow: 0 0 40px var(--accent); z-index: 9999 !important; }
         
-        /* 右侧滚动提示视觉动画 */
         .scroll-ui {
             position: fixed; top: 50%; right: 40px; transform: translateY(-50%);
             z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 15px;
@@ -165,18 +173,21 @@
             background: #000; overflow: hidden; display: none; opacity: 0; transition: opacity 1s ease;
         }
         
-        /* 修复：将背景视频设置为绝对全屏覆盖 */
+        /* 强制视频铺满屏幕全屏覆盖 */
         #lab-wrapper video { 
             display: block; 
             position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             object-fit: cover;
+            object-position: center;
             z-index: 1;
             opacity: 0.35;
             pointer-events: none;
+            margin: 0;
+            padding: 0;
         }
         
         #lab-wrapper canvas { display: block; width: 100vw; height: 100vh; position: absolute; top:0; left:0; z-index: 10; pointer-events: none;}
@@ -746,7 +757,6 @@
             if (v1) { v1.pause(); v1.currentTime = 0; } 
         }
 
-        // 【修复穿模 Bug】：点击第二页的返回键时，彻底干掉内联透明度和显示状态
         window.reverseReveal = function() { 
             const p2 = document.getElementById('page2-wrapper');
             if (p2.scrollTop > 50) {
@@ -755,12 +765,11 @@
             }
             p2.classList.remove('active');
             
-            // 强制覆盖内联 opacity 为 0
+            // 【核心修复】：强制将内联的透明度设为 0，防止透出到第一页
             p2.style.opacity = '0';
 
             setTimeout(() => {
-                // 动画走完后隐藏 DOM
-                p2.style.display = 'none'; 
+                p2.style.display = 'none'; // 彻底隐藏
                 document.getElementById('underlying-page').style.transform = "scale(0.9)";
                 document.getElementById('ui-layer').classList.remove('zoom-reveal');
                 document.getElementById('userInput').value = "";
@@ -791,6 +800,7 @@
                 labWrapper.style.display = 'block'; void labWrapper.offsetWidth;
                 labWrapper.style.opacity = '1'; labWrapper.classList.add('active');
                 resetLabState(); 
+                if (window.forceLabResize) window.forceLabResize(); // 强制视频画布自适应重绘
                 
                 const v1 = document.getElementById('v1');
                 if (v1) { v1.currentTime = 0; v1.play(); }
@@ -808,14 +818,8 @@
                 p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth;
                 p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active');
                 
-                // 【修复：从 Page5 返回 Page4 时，确保 Page4 导航按钮恢复】
                 const p4Nav = document.getElementById('p4-nav');
-                if (p4Nav) {
-                    p4Nav.style.transitionDelay = '0.8s';
-                    p4Nav.style.opacity = '1';
-                    p4Nav.style.transform = 'translateX(0)';
-                    p4Nav.style.pointerEvents = 'auto';
-                }
+                if (p4Nav) p4Nav.classList.remove('nav-hidden');
                 
                 if (window.resetPage4) window.resetPage4();
             }, 1000);
@@ -944,7 +948,6 @@
             }, 1000);
         };
 
-        // 【修复：Page4 第一次打开没有导航按钮的问题】
         window.goToMatrixPage = function() { 
             const labWrapper = document.getElementById('lab-wrapper');
             labWrapper.style.opacity = '0';
@@ -955,14 +958,8 @@
                 p4Wrapper.style.display = 'block'; void p4Wrapper.offsetWidth; 
                 p4Wrapper.style.opacity = '1'; p4Wrapper.classList.add('active'); 
                 
-                // 强制覆写导航容器样式，避免第一次无过渡
                 const p4Nav = document.getElementById('p4-nav');
-                if (p4Nav) {
-                    p4Nav.style.transitionDelay = '0.8s'; // 初次进入留出延迟感
-                    p4Nav.style.opacity = '1';
-                    p4Nav.style.transform = 'translateX(0)';
-                    p4Nav.style.pointerEvents = 'auto';
-                }
+                if (p4Nav) p4Nav.classList.remove('nav-hidden');
 
                 if (!window.p4Init) { window.initPage4(); window.p4Init = true; } 
                 else { window.resetPage4(); }
@@ -1192,6 +1189,7 @@
                             if (!window.labInit) { window.initLab(); window.labInit = true; }
                             else { 
                                 resetLabState();
+                                if (window.forceLabResize) window.forceLabResize(); 
                                 const v1 = document.getElementById('v1');
                                 if (v1) { v1.currentTime = 0; v1.play(); } 
                             }
@@ -1404,6 +1402,10 @@
                 currentX = 0; while(currentX < width + 100) { rainLayers[1].push({ x: currentX, yOffset: Math.random() * 1000, speed: 0.08 + Math.random() * 0.04 }); currentX += 30 + Math.random() * 30; }
                 currentX = 0; while(currentX < width + 100) { rainLayers[2].push({ x: currentX, yOffset: Math.random() * 1000, speed: 0.15 + Math.random() * 0.08 }); currentX += 50 + Math.random() * 60; }
             }
+            
+            window.forceLabResize = function() {
+                initLabSize();
+            };
 
             window.addEventListener('resize', () => { if (document.getElementById('lab-wrapper').classList.contains('active')) { initLabSize(); } });
 
@@ -1753,13 +1755,8 @@
                 for(let i = 0; i < 8000; i++) { particles.push(new NoiseParticle(Math.random() * width, Math.random() * height, false)); }
                 nodes = []; 
                 
-                // 【修复：隐去导航按钮时清除延迟，保证干净消失】
                 const p4Nav = document.getElementById('p4-nav');
-                if (p4Nav) {
-                    p4Nav.style.transitionDelay = '0s';
-                    p4Nav.style.opacity = '0';
-                    p4Nav.style.pointerEvents = 'none';
-                }
+                if (p4Nav) p4Nav.classList.add('nav-hidden');
             }
 
             function animate() {
@@ -1798,14 +1795,9 @@
 
             window.resetPage4 = function() { 
                 p4Wrapper.style.transition = 'opacity 1s ease'; 
-                // 【修复：重置页面时将导航按钮状态强行恢复】
                 const p4Nav = document.getElementById('p4-nav');
-                if (p4Nav) {
-                    p4Nav.style.transitionDelay = '0s';
-                    p4Nav.style.opacity = '1';
-                    p4Nav.style.transform = 'translateX(0)';
-                    p4Nav.style.pointerEvents = 'auto';
-                }
+                if (p4Nav) p4Nav.classList.remove('nav-hidden');
+                
                 nodes = []; particles = []; systemState = 'NORMAL'; networkCtx.clearRect(0, 0, width, height); initNodes(); 
             };
             requestAnimationFrame(animate);
